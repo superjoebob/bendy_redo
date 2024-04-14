@@ -1,0 +1,7 @@
+C:\gamedev\synthman_git\synthman\resource_builder\bin\Release\resource_builder.exe.config
+C:\gamedev\synthman_git\synthman\resource_builder\bin\Release\resource_builder.exe
+C:\gamedev\synthman_git\synthman\resource_builder\bin\Release\resource_builder.pdb
+C:\gamedev\synthman_git\synthman\resource_builder\obj\Release\resource_builder.csproj.AssemblyReference.cache
+C:\gamedev\synthman_git\synthman\resource_builder\obj\Release\resource_builder.csproj.CoreCompileInputs.cache
+C:\gamedev\synthman_git\synthman\resource_builder\obj\Release\resource_builder.exe
+C:\gamedev\synthman_git\synthman\resource_builder\obj\Release\resource_builder.pdb

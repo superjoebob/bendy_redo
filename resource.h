@@ -1,0 +1,35 @@
+#define PNG_background 101
+#define PNG_bendyBack 102
+#define PNG_bendyCheckbox 103
+#define PNG_bendyFull 104
+#define PNG_bendyGuide 105
+#define PNG_bendyInfoButton 106
+#define PNG_bendyLessFull 107
+#define PNG_bendyNumbers 108
+#define PNG_bendySpinnerDown 109
+#define PNG_bendySpinnerFrame 110
+#define PNG_bendySpinnerUp 111
+#define PNG_bendyTitle 112
+#define PNG_biosFontCaseSensitive_gray_halfres 113
+#define PNG_biosFontCaseSensitive_halfres 114
+#define PNG_buttonContract 115
+#define PNG_buttonExpand 116
+#define PNG_checkboxPanning 117
+#define PNG_checkboxPanningSimple 118
+#define PNG_checkboxPitch 119
+#define PNG_checkboxPitchSimple 120
+#define PNG_checkboxTriggerNotes 121
+#define PNG_checkboxTriggerNotesSimple 122
+#define PNG_checkboxVelocity 123
+#define PNG_checkboxVelocitySimple 124
+#define PNG_harmonyFrame 125
+#define PNG_knob 126
+#define PNG_tinyCheckbox 127
+# ifdef APSTUDIO_INVOKED
+# ifndef APSTUDIO_READONLY_SYMBOLS
+#define _APS_NEXT_RESOURCE_VALUE        103
+#define _APS_NEXT_COMMAND_VALUE         40001
+#define _APS_NEXT_CONTROL_VALUE         1001
+#define _APS_NEXT_SYMED_VALUE           101
+#endif
+#endif
