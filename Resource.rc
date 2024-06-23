@@ -27,4 +27,5 @@ PNG_checkboxVelocitySimple PNG "C:\\gamedev\\bendy_redo\\obj\\Debug\\x64\\\\asse
 PNG_harmonyFrame PNG "C:\\gamedev\\bendy_redo\\obj\\Debug\\x64\\\\assets\\harmonyFrame.png"
 PNG_knob PNG "C:\\gamedev\\bendy_redo\\obj\\Debug\\x64\\\\assets\\knob.png"
 PNG_tinyCheckbox PNG "C:\\gamedev\\bendy_redo\\obj\\Debug\\x64\\\\assets\\tinyCheckbox.png"
+PNG_tinyCheckboxSimple PNG "C:\\gamedev\\bendy_redo\\obj\\Debug\\x64\\\\assets\\tinyCheckboxSimple.png"
 #endif

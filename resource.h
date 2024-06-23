@@ -25,6 +25,7 @@
 #define PNG_harmonyFrame 125
 #define PNG_knob 126
 #define PNG_tinyCheckbox 127
+#define PNG_tinyCheckboxSimple 128
 # ifdef APSTUDIO_INVOKED
 # ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        103

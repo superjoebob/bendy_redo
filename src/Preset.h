@@ -5,6 +5,7 @@ struct Preset : Serializable
 	Preset();
 	virtual void serialize(StreamWrapper* s) override;
 	virtual void deserialize(StreamWrapper* s) override;
+	virtual void legacy_deserialize(StreamWrapper* s) override;
 
 	std::wstring name;
 	ParameterInt range;

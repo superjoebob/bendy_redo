@@ -15,6 +15,23 @@ void StreamWrapper::advance(int bytes)
 	_stream->Seek(li, STREAM_SEEK_CUR, 0);
 }
 
+int StreamWrapper::getPosition()
+{
+	LARGE_INTEGER li;
+	li.QuadPart = 0;
+
+	ULARGE_INTEGER pos;
+	_stream->Seek(li, STREAM_SEEK_CUR, &pos);
+	return (int)pos.QuadPart;
+}
+
+void StreamWrapper::setPosition(int bytes)
+{
+	LARGE_INTEGER li;
+	li.QuadPart = bytes;
+	_stream->Seek(li, STREAM_SEEK_SET, 0);
+}
+
 char StreamWrapper::readChar()
 {
 	char ret = 0;

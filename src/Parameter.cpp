@@ -1,6 +1,6 @@
 #include "Parameter.h"
 #include "StreamWrapper.h"
-Parameter::Parameter(std::wstring name, std::wstring id):
+PlugParameter::PlugParameter(std::wstring name, std::wstring id):
 	Serializable(name, id),
 	canSetRange(false)
 {
@@ -8,7 +8,7 @@ Parameter::Parameter(std::wstring name, std::wstring id):
 }
 
 ParameterLink::ParameterLink(std::wstring name, std::wstring id) :
-	Parameter(name, id),
+	PlugParameter(name, id),
 	index(0)
 {
 }
@@ -25,9 +25,77 @@ void ParameterLink::deserialize(StreamWrapper* s)
 	Serializable::deserialize(s);
 }
 
+void ParameterLink::legacy_deserialize(StreamWrapper* s)
+{
+	index = s->readUShort();
+	Serializable::legacy_deserialize(s);
+}
+
+
+void split(std::wstring str, std::wstring splitBy, std::vector<std::wstring>& tokens)
+{
+	/* Store the original string in the array, so we can loop the rest
+	 * of the algorithm. */
+	tokens.push_back(str);
+
+	// Store the split index in a 'size_t' (unsigned integer) type.
+	size_t splitAt;
+	// Store the size of what we're splicing out.
+	size_t splitLen = splitBy.size();
+	// Create a string for temporarily storing the fragment we're processing.
+	std::wstring frag;
+	// Loop infinitely - break is internal.
+	while (true)
+	{
+		/* Store the last string in the vector, which is the only logical
+		 * candidate for processing. */
+		frag = tokens.back();
+		/* The index where the split is. */
+		splitAt = frag.find(splitBy);
+		// If we didn't find a new split point...
+		if (splitAt == std::string::npos)
+		{
+			// Break the loop and (implicitly) return.
+			break;
+		}
+		/* Put everything from the left side of the split where the string
+		 * being processed used to be. */
+		tokens.back() = frag.substr(0, splitAt);
+		/* Push everything from the right side of the split to the next empty
+		 * index in the vector. */
+		tokens.push_back(frag.substr(splitAt + splitLen, frag.size() - (splitAt + splitLen)));
+	}
+}
+
+
+template<typename T> void ParameterList<T>::setFromString(std::wstring value)
+{
+	std::vector<std::wstring> tokens;
+	split(value, L",", tokens);
+
+	int idx = 0;
+	for (auto it = tokens.begin(); it != tokens.end(); it++)
+	{
+		if (idx < _count)
+			((PlugParameter*)list[idx])->setFromString(*it);
+	}
+}
+template<typename T> std::wstring ParameterList<T>::toString()
+{
+	std::wstring ret = L"";
+	for (int i = 0; i < _count; i++)
+	{
+		ret += ((PlugParameter*)list[i])->toString();
+		if (i != _count - 1)
+			ret += L",";
+	}
+
+	return ret;
+}
+
 
 ParameterLinkList::ParameterLinkList(std::wstring name, std::wstring id, int num) :
-	Parameter(name, id)
+	ParameterList<ParameterLink>(name, id)
 {
 	list = new ParameterLink * [num];
 	for (int i = 0; i < num; i++)
@@ -44,59 +112,119 @@ ParameterLinkList::~ParameterLinkList()
 }
 
 ParameterFloat::ParameterFloat(std::wstring name, std::wstring id, float value, float min, float max) :
-	Parameter(name, id),
+	PlugParameter(name, id),
 	value(value),
-	min(min),
-	max(max)
+	_min(min),
+	_max(max),
+	_minMaxSet(false)
 {
 	canSetRange = true;
 }
 
 void ParameterFloat::serialize(StreamWrapper* s)
 {
+	if (_minMaxSet)
+	{
+		s->writeBool(true);
+		s->writeFloat(_min);
+		s->writeFloat(_max);
+	}
+	else
+		s->writeBool(false);
+
+	s->writeFloat(value);
+
 	Serializable::serialize(s);
 }
 
 void ParameterFloat::deserialize(StreamWrapper* s)
 {
-	bool minMaxSet = s->readBool();
-	min = minMaxSet ? s->readFloat() : 0;
-	max = minMaxSet ? s->readFloat() : 0;
+	_minMaxSet = s->readBool();
+	if (_minMaxSet)
+	{
+		_min = s->readFloat();
+		_max = s->readFloat();
+	}
 	value = s->readFloat();
 
 	Serializable::deserialize(s);
 }
 
+void ParameterFloat::legacy_deserialize(StreamWrapper* s)
+{
+	_minMaxSet = s->readBool();
+	if (_minMaxSet)
+	{
+		_min = s->readFloat();
+		_max = s->readFloat();
+	}
+	value = s->readFloat();
+
+	Serializable::legacy_deserialize(s);
+}
+
 
 ParameterInt::ParameterInt(std::wstring name, std::wstring id, int value, int min, int max):
-	Parameter(name, id),
+	PlugParameter(name, id),
 	value(value),
-	min(min),
-	max(max)
+	_min(min),
+	_max(max),
+	_minMaxSet(false)
 {
 	canSetRange = true;
 }
 
 void ParameterInt::serialize(StreamWrapper* s)
 {
+	if (_minMaxSet)
+	{
+		s->writeBool(true);
+		s->writeInt(_min);
+		s->writeInt(_max);
+	}
+	else
+		s->writeBool(false);
+
+	s->writeInt(value);
+
 	Serializable::serialize(s);
 }
 
 void ParameterInt::deserialize(StreamWrapper* s)
 {
-	bool minMaxSet = s->readBool();
-	if (minMaxSet)
+	_minMaxSet = s->readBool();
+	if (_minMaxSet)
 	{
-		min = s->readInt();
-		max = s->readInt();
+		_min = s->readInt();
+		_max = s->readInt();
 	}
 	value = s->readInt();
 
 	Serializable::deserialize(s);
 }
 
+void ParameterInt::legacy_deserialize(StreamWrapper* s)
+{
+	_minMaxSet = s->readBool();
+	if (_minMaxSet)
+	{
+		_min = s->readInt();
+		_max = s->readInt();
+	}
+	value = s->readInt();
+
+	Serializable::legacy_deserialize(s);
+}
+
+
+template<typename T> ParameterList<T>::ParameterList(std::wstring name, std::wstring id)
+	:PlugParameter(name, id)
+{
+
+}
+
 ParameterIntList::ParameterIntList(std::wstring name, std::wstring id, int num, int value, int min, int max) :
-	Parameter(name, id)
+	ParameterList<ParameterInt>(name, id)
 {
 	list = new ParameterInt*[num];
 	for (int i = 0; i < num; i++)
@@ -105,6 +233,8 @@ ParameterIntList::ParameterIntList(std::wstring name, std::wstring id, int num, 
 		list[i] = new ParameterInt(name, subID, value, min, max);
 		map(list[i]);
 	}
+
+	_count = num;
 }
 ParameterIntList::~ParameterIntList()
 {
@@ -118,7 +248,7 @@ ParameterMidiCC::ParameterMidiCC(std::wstring name, std::wstring id, int value) 
 }
 
 ParameterMidiCCList::ParameterMidiCCList(std::wstring name, std::wstring id, int num, int value) :
-	Parameter(name, id)
+	ParameterList<ParameterMidiCC>(name, id)
 {
 	list = new ParameterMidiCC*[num];
 	for (int i = 0; i < num; i++)
@@ -127,6 +257,8 @@ ParameterMidiCCList::ParameterMidiCCList(std::wstring name, std::wstring id, int
 		list[i] = new ParameterMidiCC(name, subID, value);
 		map(list[i]);
 	}
+
+	_count = num;
 }
 ParameterMidiCCList::~ParameterMidiCCList()
 {
@@ -134,7 +266,7 @@ ParameterMidiCCList::~ParameterMidiCCList()
 }
 
 ParameterString::ParameterString(std::wstring name, std::wstring id, std::wstring value) :
-	Parameter(name, id)
+	PlugParameter(name, id)
 {
 	this->value = value;
 }
@@ -150,9 +282,14 @@ void ParameterString::deserialize(StreamWrapper* s)
 	value = s->readString();
 	Serializable::deserialize(s);
 }
+void ParameterString::legacy_deserialize(StreamWrapper* s)
+{
+	value = s->readString();
+	Serializable::legacy_deserialize(s);
+}
 
 ParameterStringList::ParameterStringList(std::wstring name, std::wstring id, int num, std::wstring value) :
-	Parameter(name, id)
+	ParameterList<ParameterString>(name, id)
 {
 	list = new ParameterString *[num];
 	for (int i = 0; i < num; i++)
@@ -161,6 +298,8 @@ ParameterStringList::ParameterStringList(std::wstring name, std::wstring id, int
 		list[i] = new ParameterString(name, subID, value);
 		map(list[i]);
 	}
+
+	_count = num;
 }
 ParameterStringList::~ParameterStringList()
 {
@@ -168,7 +307,7 @@ ParameterStringList::~ParameterStringList()
 }
 
 ParameterBool::ParameterBool(std::wstring name, std::wstring id, bool value) :
-	Parameter(name, id)
+	PlugParameter(name, id)
 {
 	this->value = value;
 }
@@ -185,8 +324,14 @@ void ParameterBool::deserialize(StreamWrapper* s)
 	Serializable::deserialize(s);
 }
 
+void ParameterBool::legacy_deserialize(StreamWrapper* s)
+{
+	value = s->readBool();
+	Serializable::legacy_deserialize(s);
+}
+
 ParameterBoolList::ParameterBoolList(std::wstring name, std::wstring id, int num, bool value) :
-	Parameter(name, id)
+	ParameterList<ParameterBool>(name, id)
 {
 	list = new ParameterBool * [num];
 	for (int i = 0; i < num; i++)
@@ -195,6 +340,8 @@ ParameterBoolList::ParameterBoolList(std::wstring name, std::wstring id, int num
 		list[i] = new ParameterBool(name, subID, value);
 		map(list[i]);
 	}
+
+	_count = num;
 }
 ParameterBoolList::~ParameterBoolList()
 {
@@ -204,5 +351,24 @@ ParameterBoolList::~ParameterBoolList()
 ParameterStringSelection::ParameterStringSelection(std::wstring name, std::wstring id, std::vector<std::wstring> strings, int value) :
 	ParameterInt(name, id, value, 0, strings.size() - 1)
 {
+	this->strings = strings;
 	canSetRange = false;
 }
+
+std::wstring ParameterStringSelection::toReadable(int index, bool shorten)
+{
+	if (index < strings.size())
+	{
+		std::wstring s = strings[index];
+		std::vector<std::wstring> tokens;
+		split(s, L"|", tokens);
+
+		if (tokens.size() == 1)
+			return s;
+		else
+			return shorten ? tokens[1] : tokens[0];
+	}
+
+	return L"null";
+}
+

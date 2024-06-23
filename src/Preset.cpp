@@ -29,10 +29,9 @@ Preset::Preset() :
 void Preset::serialize(StreamWrapper* s)
 {
 	s->writeString(name);
-	Serializable::serialize(s);
 	s->writeUShort(0);//no note names yet
+	Serializable::serialize(s);
 }
-
 void Preset::deserialize(StreamWrapper* s)
 {
 	name = s->readString();
@@ -44,4 +43,17 @@ void Preset::deserialize(StreamWrapper* s)
 	}
 
 	Serializable::deserialize(s);
+}
+
+void Preset::legacy_deserialize(StreamWrapper* s)
+{
+	name = s->readString();
+	int numNoteNames = s->readUShort();
+	for (int i = 0; i < numNoteNames; i++)
+	{
+		char key = s->readChar();
+		std::wstring value = s->readString();
+	}
+
+	Serializable::legacy_deserialize(s);
 }

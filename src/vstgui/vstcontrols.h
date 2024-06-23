@@ -97,6 +97,7 @@ enum CControlEnum
 
 #define sScaleFactor 3
 #define sPoint(x, y) CPoint(x * sScaleFactor, y * sScaleFactor)
+#define sCoord(x) CCoord(x * sScaleFactor)
 #define hsPoint(x, y) CPoint(x * (sScaleFactor / 2), y * (sScaleFactor / 2))
 
 //-----------------------------------------------------------------------------
@@ -169,6 +170,7 @@ public:
 	//@{
 	virtual void  setTag (long val) { tag = val; }
 	virtual long  getTag () const { return tag; }
+	virtual void setParameter(PlugParameter* param) override;
 
 	virtual void beginEdit ();
 	virtual void endEdit ();

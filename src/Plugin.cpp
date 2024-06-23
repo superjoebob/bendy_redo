@@ -47,38 +47,40 @@ Plugin::~Plugin()
 
 void _stdcall Plugin::SaveRestoreState(IStream* Stream, BOOL Save)
 {
-	unsigned long magicNumber = 14928659832781827043L;
+	unsigned long magicNumber = 13118359537711872022L;
+	unsigned long legacyMagicNumber = 14928659832781827043L;
 	StreamWrapper* s = new StreamWrapper(Stream);
 	if (Save)
 	{
-		//Stream->Write(&ParamValue, NumParamsConst * 4, 0);
+		unsigned long written = 0;
+		Stream->Write(&magicNumber, sizeof(unsigned long), &written);
+		if(_state != nullptr)
+			_state->serialize(s);
 	}
 	else
 	{
 		unsigned long written = 0;
 		unsigned long magicNumberRead = 0;
 		Stream->Read(&magicNumberRead, sizeof(unsigned long), &written);
-		int streamSize = 0;
-		Stream->Read(&streamSize, sizeof(int), &written);
-		//char* data = new char[streamSize];
-		//Stream->Read(data, streamSize, &written);
+		if (magicNumberRead == legacyMagicNumber)
+		{
+			//deserialize using old synthman logic
+			int streamSize = 0;
+			Stream->Read(&streamSize, sizeof(int), &written);
+			if (_state != nullptr)
+				delete _state;
 
-		if (_state != nullptr)
-			delete _state;
+			_state = new State();
+			_state->legacy_deserialize(s);
+		}
+		else if (magicNumberRead == magicNumber)
+		{
+			if (_state != nullptr)
+				delete _state;
 
-		_state = new State();
-		_state->deserialize(s);
-
-
-		//unsigned int childID = s->readUInt();
-		//while (childID != 0)
-		//{
-		//	unsigned int paramSize = s->readUInt();
-		//	s->advance(paramSize); //ignore data for now, should figure out how to read it
-
-		//	childID = s->readUInt();
-		//}
-
+			_state = new State();
+			_state->deserialize(s);
+		}
 
 		ProcessAllParams();
 	}
@@ -118,6 +120,44 @@ intptr_t _stdcall Plugin::Dispatcher(intptr_t ID, intptr_t Index, intptr_t Value
 		}
 	}
 
+	return 0;
+}
+
+enum class AutomationTypeFlags
+{
+	UpdateValue = 1,		// update the value
+	GetValue = 2,			// retrieves the value
+	ShowHint = 4,			// updates the hint (if any)
+	UpdateControl = 16,		// updates the wheel/knob
+	FromMIDI = 32,			// value from 0 to 65536 has to be translated (& always returned, even if REC_GetValue isn't set)
+	NoLink = 1024,			// don't check if wheels are linked (internal to plugins, useful for linked controls)
+	InternalCtrl = 2048,	// sent by an internal controller - internal controllers should pay attention to those, to avoid nasty feedbacks
+	PlugReserved = 4096,    // free to use by plugins
+	UpdateUIThreaded = 8192,
+	GetValueUI = 524288,
+};
+
+int _stdcall Plugin::ProcessParam(int index, int value, int RECFlags)
+{
+	AutomationTypeFlags type = (AutomationTypeFlags)RECFlags;
+	bool fromMidi = ((int)type & (int)AutomationTypeFlags::FromMIDI);
+	bool updateValue = (int)type & (int)AutomationTypeFlags::UpdateValue;
+
+	bool needSetValue = updateValue || fromMidi;
+	bool getValue = (int)type & (int)AutomationTypeFlags::GetValue;
+	bool updateUI = (int)type & (int)AutomationTypeFlags::UpdateControl;
+	bool getValueUI = ((int)type & (int)AutomationTypeFlags::GetValueUI);
+	//if (!(needSetValue || updateValue || getValue || updateUI) /* || (parameterHash > kExtParamsEnd)*/)
+	//	return -1;
+
+	if ((int)type & (int)AutomationTypeFlags::UpdateValue)
+	{
+		PlugParameter* param = getParameter(index);
+		int max = param->getMax();
+		if (param != nullptr)
+			param->setFloat(value);
+	}
+	
 	return 0;
 }
 
@@ -185,6 +225,33 @@ void _stdcall Plugin::Voice_Kill(TVoiceHandle Handle)
 	//delete (PPlugVoice)Handle;
 }
 
+Serializable* Plugin::getSerializable(std::wstring control)
+{
+	auto it = _state->namemap.find(control);
+	if (it == _state->namemap.end())
+		return nullptr;
+
+	return (*it).second;
+}
+
+PlugParameter* Plugin::getParameter(std::wstring control)
+{
+	auto it = _state->namemap.find(control);
+	if (it == _state->namemap.end())
+		return nullptr;
+
+	return dynamic_cast<PlugParameter*>((*it).second);
+}
+
+PlugParameter* Plugin::getParameter(int hash)
+{
+	auto it = _state->hashmap.find(hash);
+	if (it == _state->hashmap.end())
+		return nullptr;
+
+	return dynamic_cast<PlugParameter*>((*it).second);
+}
+
 int Plugin::getCID(std::wstring control)
 {
 	auto it = _state->namemap.find(control);
@@ -193,11 +260,12 @@ int Plugin::getCID(std::wstring control)
 
 	return (*it).second->hash;
 }
-float Plugin::getValue(std::wstring control)
+
+std::wstring Plugin::toString(std::wstring control)
 {
 	auto it = _state->namemap.find(control);
 	if (it == _state->namemap.end())
-		return -1;
+		return L"";
 
-	return (*it).second->getFloat();
+	return ((PlugParameter*)(*it).second)->toString();
 }

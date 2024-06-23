@@ -197,18 +197,35 @@ void State::serialize(StreamWrapper* s)
 
 void State::deserialize(StreamWrapper* s)
 {
+    cleanup(); //get rid of existing data
+    versionMajor = s->readInt();
+    versionMinor = s->readInt();
+
+    Serializable::deserialize(s);
+
+    int numPresets = s->readInt();
+    presets = new Preset * [numPresets];
+    for (int i = 0; i < numPresets; i++)
+    {
+        presets[i] = new Preset();
+        presets[i]->deserialize(s);
+    }
+}
+
+void State::legacy_deserialize(StreamWrapper* s)
+{
 	cleanup(); //get rid of existing data
 	versionMajor = s->readInt();
 	versionMinor = s->readInt();
 
-	Serializable::deserialize(s);
+	Serializable::legacy_deserialize(s);
 
 	int numPresets = s->readInt();
 	presets = new Preset * [numPresets];
 	for (int i = 0; i < numPresets; i++)
 	{
 		presets[i] = new Preset();
-		presets[i]->deserialize(s);
+		presets[i]->legacy_deserialize(s);
 	}
 }
 

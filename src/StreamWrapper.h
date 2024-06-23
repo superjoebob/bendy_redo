@@ -7,6 +7,8 @@ public:
 	StreamWrapper(IStream* data);
 
 	void advance(int bytes);
+	int getPosition();
+	void setPosition(int bytes);
 
 	char readChar();
 	void writeChar(char value);

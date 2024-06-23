@@ -37,6 +37,8 @@
 #include <math.h>
 #include <string.h>
 
+#include "Parameter.h"
+
 #ifndef __vstcontrols__
 #include "vstcontrols.h"
 #endif
@@ -143,6 +145,16 @@ CControl::CControl (const CControl& c)
 //------------------------------------------------------------------------
 CControl::~CControl ()
 {
+}
+
+void CControl::setParameter(PlugParameter* param)
+{
+	setTag(param->hash);
+	setMax(param->getMax());
+	setMin(param->getMin());
+	setValue(param->getFloat());
+	setWheelInc(param->getInc());
+	CBaseObject::setParameter(param);
 }
 
 //------------------------------------------------------------------------
@@ -286,7 +298,6 @@ COnOffButton::COnOffButton (const COnOffButton& v)
 //------------------------------------------------------------------------
 COnOffButton::~COnOffButton ()
 {}
-
 //------------------------------------------------------------------------
 void COnOffButton::draw (CDrawContext *pContext)
 {
@@ -367,6 +378,8 @@ CMouseEventResult COnOffButton::onMouseDown (CPoint& where, const long& buttons)
 		beginEdit ();
 	
 		listener->valueChanged (this);
+		if (_param != nullptr)
+			_param->setNormalized(value);
 	
 		// end of edit parameter
 		endEdit ();
@@ -380,6 +393,8 @@ CMouseEventResult COnOffButton::onMouseDown (CPoint& where, const long& buttons)
 		beginEdit ();
 	
 		listener->valueChanged (this);
+		if (_param != nullptr)
+			_param->setNormalized(value);
 	
 		// end of edit parameter
 		endEdit ();
@@ -724,10 +739,23 @@ bool CKnob::onWheel (const CPoint& where, const float &distance, const long &but
 	if (!bMouseEnabled)
 		return false;
 
-	if (buttons & kShift)
-		value += 0.1f * distance * wheelInc;
+
+	if (getMax() <= 10.0f)
+	{
+
+		if (buttons & kShift)
+			value += 0.1f * distance * wheelInc;
+		else
+			value += distance * wheelInc;
+	}
 	else
-		value += distance * wheelInc;
+	{
+		if (buttons & kShift)
+			value += 1.0f * distance * wheelInc;
+		else
+			value += 10.0f * distance * wheelInc;
+	}
+
 	bounceValue ();
 
 	if (isDirty () && listener)
@@ -3592,13 +3620,15 @@ bool CAnimKnob::isDirty () const
 void CAnimKnob::draw (CDrawContext *pContext)
 {
 	CPoint where (0, 0);
-	if (value >= 0.f) 
+
+	float normalizedValue = (value - getMin()) / (float)(getMax() - getMin());
+	if (normalizedValue >= 0.f)
 	{
 		CCoord tmp = heightOfOneImage * (subPixmaps - 1);
 		if (bInverseBitmap)
-			where.v = (CCoord)((1 - value) * (float)tmp);
+			where.v = (CCoord)((1 - normalizedValue) * (float)tmp);
 		else
-			where.v = (CCoord)(value * (float)tmp);
+			where.v = (CCoord)(normalizedValue * (float)tmp);
 		for (CCoord realY = 0; realY <= tmp; realY += heightOfOneImage) 
 		{
 			if (where.v < realY) 

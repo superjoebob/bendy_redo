@@ -111,6 +111,8 @@
 #define VSTGUI_DEPRECATED(x)
 #endif
 
+struct PlugParameter;
+
 //----------------------------------------------------
 //----------------------------------------------------
 BEGIN_NAMESPACE_VSTGUI
@@ -350,6 +352,17 @@ struct CPoint
 
 	CPoint &offset (const CCoord h, const CCoord v)
 	{ this->h += h; this->v += v; return *this; }
+
+	CPoint operator + (const CPoint& other) const
+	{
+		return CPoint(x + other.x, y + other.y);
+	}
+
+	CPoint operator - (const CPoint& other) const
+	{
+		return CPoint(x - other.x, y - other.y);
+	}
+
 
 	union
 	{ CCoord h; CCoord x;};
@@ -622,6 +635,7 @@ enum CViewAutosizing
 //! \brief Base Object with reference counter
 /// \nosubgrouping
 //-----------------------------------------------------------------------------
+
 class CBaseObject
 {
 public:
@@ -644,8 +658,13 @@ public:
 	virtual CMessageResult notify (CBaseObject* sender, const char* message) { return kMessageUnknown; }
 	//@}
 
+	PlugParameter* getParameter() { return _param; }
+	virtual void setParameter(PlugParameter* param) { _param = param; }
+
 private:
 	long nbReference;
+protected:
+	PlugParameter* _param;
 };
 
 //-----------------------------------------------------------------------------

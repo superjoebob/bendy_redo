@@ -8,6 +8,7 @@ struct State : Serializable
 	~State();
 	virtual void serialize(StreamWrapper* s) override;
 	virtual void deserialize(StreamWrapper* s) override;
+	virtual void legacy_deserialize(StreamWrapper* s) override;
 
 	int versionMajor;
 	int versionMinor;
