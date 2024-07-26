@@ -1,33 +1,40 @@
 #include "Parameter.h"
 #include "StreamWrapper.h"
+
+bool MidiCluster::shouldTrigger()
+{
+	return (enabled == nullptr || enabled->value) && cc != nullptr && value != nullptr;
+}
+
 PlugParameter::PlugParameter(std::wstring name, std::wstring id):
 	Serializable(name, id),
-	canSetRange(false)
+	canSetRange(false),
+	midiTrigger(MidiTrigger::None)
 {
 
 }
 
 ParameterLink::ParameterLink(std::wstring name, std::wstring id) :
 	PlugParameter(name, id),
-	index(0)
+	linkHash(0)
 {
 }
 
-void ParameterLink::serialize(StreamWrapper* s)
+void ParameterLink::serialize(Stream* s)
 {
-	s->writeUShort(index);
+	s->writeUInt(linkHash);
 	Serializable::serialize(s);
 }
 
-void ParameterLink::deserialize(StreamWrapper* s)
+void ParameterLink::deserialize(Stream* s)
 {
-	index = s->readUShort();
+	linkHash = s->readUInt();
 	Serializable::deserialize(s);
 }
 
-void ParameterLink::legacy_deserialize(StreamWrapper* s)
+void ParameterLink::legacy_deserialize(Stream* s)
 {
-	index = s->readUShort();
+	linkHash = s->readUShort();
 	Serializable::legacy_deserialize(s);
 }
 
@@ -77,7 +84,7 @@ template<typename T> void ParameterList<T>::setFromString(std::wstring value)
 	for (auto it = tokens.begin(); it != tokens.end(); it++)
 	{
 		if (idx < _count)
-			((PlugParameter*)list[idx])->setFromString(*it);
+			((PlugParameter*)&_list[idx])->setFromString(*it);
 	}
 }
 template<typename T> std::wstring ParameterList<T>::toString()
@@ -85,7 +92,7 @@ template<typename T> std::wstring ParameterList<T>::toString()
 	std::wstring ret = L"";
 	for (int i = 0; i < _count; i++)
 	{
-		ret += ((PlugParameter*)list[i])->toString();
+		ret += ((PlugParameter*)&_list[i])->toString();
 		if (i != _count - 1)
 			ret += L",";
 	}
@@ -97,18 +104,14 @@ template<typename T> std::wstring ParameterList<T>::toString()
 ParameterLinkList::ParameterLinkList(std::wstring name, std::wstring id, int num) :
 	ParameterList<ParameterLink>(name, id)
 {
-	list = new ParameterLink * [num];
 	for (int i = 0; i < num; i++)
 	{
 		std::wstring subID = id + std::to_wstring(i);
-		list[i] = new ParameterLink(name, subID);
-		map(list[i]);
+		_list.push_back(ParameterLink(name, subID));
 	}
-}
 
-ParameterLinkList::~ParameterLinkList()
-{
-	delete[] list;
+	_count = num;
+	initialize_map();
 }
 
 ParameterFloat::ParameterFloat(std::wstring name, std::wstring id, float value, float min, float max) :
@@ -121,7 +124,7 @@ ParameterFloat::ParameterFloat(std::wstring name, std::wstring id, float value, 
 	canSetRange = true;
 }
 
-void ParameterFloat::serialize(StreamWrapper* s)
+void ParameterFloat::serialize(Stream* s)
 {
 	if (_minMaxSet)
 	{
@@ -137,7 +140,7 @@ void ParameterFloat::serialize(StreamWrapper* s)
 	Serializable::serialize(s);
 }
 
-void ParameterFloat::deserialize(StreamWrapper* s)
+void ParameterFloat::deserialize(Stream* s)
 {
 	_minMaxSet = s->readBool();
 	if (_minMaxSet)
@@ -150,7 +153,7 @@ void ParameterFloat::deserialize(StreamWrapper* s)
 	Serializable::deserialize(s);
 }
 
-void ParameterFloat::legacy_deserialize(StreamWrapper* s)
+void ParameterFloat::legacy_deserialize(Stream* s)
 {
 	_minMaxSet = s->readBool();
 	if (_minMaxSet)
@@ -174,7 +177,7 @@ ParameterInt::ParameterInt(std::wstring name, std::wstring id, int value, int mi
 	canSetRange = true;
 }
 
-void ParameterInt::serialize(StreamWrapper* s)
+void ParameterInt::serialize(Stream* s)
 {
 	if (_minMaxSet)
 	{
@@ -190,7 +193,7 @@ void ParameterInt::serialize(StreamWrapper* s)
 	Serializable::serialize(s);
 }
 
-void ParameterInt::deserialize(StreamWrapper* s)
+void ParameterInt::deserialize(Stream* s)
 {
 	_minMaxSet = s->readBool();
 	if (_minMaxSet)
@@ -203,7 +206,7 @@ void ParameterInt::deserialize(StreamWrapper* s)
 	Serializable::deserialize(s);
 }
 
-void ParameterInt::legacy_deserialize(StreamWrapper* s)
+void ParameterInt::legacy_deserialize(Stream* s)
 {
 	_minMaxSet = s->readBool();
 	if (_minMaxSet)
@@ -226,19 +229,13 @@ template<typename T> ParameterList<T>::ParameterList(std::wstring name, std::wst
 ParameterIntList::ParameterIntList(std::wstring name, std::wstring id, int num, int value, int min, int max) :
 	ParameterList<ParameterInt>(name, id)
 {
-	list = new ParameterInt*[num];
 	for (int i = 0; i < num; i++)
 	{
 		std::wstring subID = id + std::to_wstring(i);
-		list[i] = new ParameterInt(name, subID, value, min, max);
-		map(list[i]);
-	}
-
+		_list.push_back(ParameterInt(name, subID, value, min, max));
+	}	
 	_count = num;
-}
-ParameterIntList::~ParameterIntList()
-{
-	delete[] list;
+	initialize_map();
 }
 
 ParameterMidiCC::ParameterMidiCC(std::wstring name, std::wstring id, int value) :
@@ -250,20 +247,16 @@ ParameterMidiCC::ParameterMidiCC(std::wstring name, std::wstring id, int value) 
 ParameterMidiCCList::ParameterMidiCCList(std::wstring name, std::wstring id, int num, int value) :
 	ParameterList<ParameterMidiCC>(name, id)
 {
-	list = new ParameterMidiCC*[num];
 	for (int i = 0; i < num; i++)
 	{
 		std::wstring subID = id + std::to_wstring(i);
-		list[i] = new ParameterMidiCC(name, subID, value);
-		map(list[i]);
+		_list.push_back(ParameterMidiCC(name, subID, value));
 	}
 
 	_count = num;
+	initialize_map();
 }
-ParameterMidiCCList::~ParameterMidiCCList()
-{
-	delete[] list;
-}
+
 
 ParameterString::ParameterString(std::wstring name, std::wstring id, std::wstring value) :
 	PlugParameter(name, id)
@@ -271,18 +264,18 @@ ParameterString::ParameterString(std::wstring name, std::wstring id, std::wstrin
 	this->value = value;
 }
 
-void ParameterString::serialize(StreamWrapper* s)
+void ParameterString::serialize(Stream* s)
 {
 	s->writeString(value);
 	Serializable::serialize(s);
 }
 
-void ParameterString::deserialize(StreamWrapper* s)
+void ParameterString::deserialize(Stream* s)
 {
 	value = s->readString();
 	Serializable::deserialize(s);
 }
-void ParameterString::legacy_deserialize(StreamWrapper* s)
+void ParameterString::legacy_deserialize(Stream* s)
 {
 	value = s->readString();
 	Serializable::legacy_deserialize(s);
@@ -291,19 +284,14 @@ void ParameterString::legacy_deserialize(StreamWrapper* s)
 ParameterStringList::ParameterStringList(std::wstring name, std::wstring id, int num, std::wstring value) :
 	ParameterList<ParameterString>(name, id)
 {
-	list = new ParameterString *[num];
 	for (int i = 0; i < num; i++)
 	{
 		std::wstring subID = id + std::to_wstring(i);
-		list[i] = new ParameterString(name, subID, value);
-		map(list[i]);
+		_list.push_back(ParameterString(name, subID, value));
 	}
 
 	_count = num;
-}
-ParameterStringList::~ParameterStringList()
-{
-	delete[] list;
+	initialize_map();
 }
 
 ParameterBool::ParameterBool(std::wstring name, std::wstring id, bool value) :
@@ -312,19 +300,19 @@ ParameterBool::ParameterBool(std::wstring name, std::wstring id, bool value) :
 	this->value = value;
 }
 
-void ParameterBool::serialize(StreamWrapper* s)
+void ParameterBool::serialize(Stream* s)
 {
 	s->writeBool(value);
 	Serializable::serialize(s);
 }
 
-void ParameterBool::deserialize(StreamWrapper* s)
+void ParameterBool::deserialize(Stream* s)
 {
 	value = s->readBool();
 	Serializable::deserialize(s);
 }
 
-void ParameterBool::legacy_deserialize(StreamWrapper* s)
+void ParameterBool::legacy_deserialize(Stream* s)
 {
 	value = s->readBool();
 	Serializable::legacy_deserialize(s);
@@ -333,21 +321,15 @@ void ParameterBool::legacy_deserialize(StreamWrapper* s)
 ParameterBoolList::ParameterBoolList(std::wstring name, std::wstring id, int num, bool value) :
 	ParameterList<ParameterBool>(name, id)
 {
-	list = new ParameterBool * [num];
 	for (int i = 0; i < num; i++)
 	{
 		std::wstring subID = id + std::to_wstring(i);
-		list[i] = new ParameterBool(name, subID, value);
-		map(list[i]);
+		_list.push_back(ParameterBool(name, subID, value));
 	}
 
 	_count = num;
+	initialize_map();
 }
-ParameterBoolList::~ParameterBoolList()
-{
-	delete[] list;
-}
-
 ParameterStringSelection::ParameterStringSelection(std::wstring name, std::wstring id, std::vector<std::wstring> strings, int value) :
 	ParameterInt(name, id, value, 0, strings.size() - 1)
 {

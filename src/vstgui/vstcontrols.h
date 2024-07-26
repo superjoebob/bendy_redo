@@ -147,7 +147,7 @@ public:
 	/// \name Value Methods
 	//-----------------------------------------------------------------------------
 	//@{
-	virtual void  setValue (float val) { value = val; }
+	virtual void  setValue(float val);
 	virtual float getValue () const { return value; };
 
 	virtual void  setMin (float val) { vmin = val; }

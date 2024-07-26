@@ -68,7 +68,6 @@ CBitmapNumber::~CBitmapNumber()
 {
 	for (int i = 0; i < _numDigits; i++)
 	{
-		removeView(_digits[i]);
 		_digits[i] = nullptr;
 	}
 	delete[] _digits;
@@ -146,23 +145,11 @@ CMouseEventResult CBitmapText::onMouseDown(CPoint& where, const long& buttons)
 {
 	if (_inputCaption != L"" && getParameter() != nullptr)
 	{
-		char caption[256];
-		wcstombs(caption, _inputCaption.c_str(), _inputCaption.length() + 1);
+		std::wstring result = ((PluginGUI*)getEditor())->getInput(_inputCaption, getParameter()->toString());
+		getParameter()->setFromString(result);
 
-		std::wstring valueString = getParameter()->toString();
-		char result[256];
-		wcstombs(result, valueString.c_str(), valueString.length() + 1);
-
-		int col = -1;
-		if (((PluginGUI*)getEditor())->getPlugin()->PlugHost->PromptEdit(-1, -1, caption, result, col))
-		{
-			std::string s(result);
-			std::wstring ws(s.begin(), s.end());
-			getParameter()->setFromString(ws);
-
-			if(_lockText == false)
-				setText(getParameter()->toString());
-		}
+		if (_lockText == false)
+			setText(getParameter()->toString());
 	}
 	return CMouseEventResult::kMouseEventHandled;
 }
@@ -216,8 +203,6 @@ CSpinner::CSpinner(const CRect& size, CFrame* frame, CControlListener* listener,
 	vmin = min;
 	vmax = max;
 
-
-
 	//CBitmapText::CBitmapText(const CRect & size, const CPoint & letterSize, CBitmap * font, std::wstring inputCaption, std::wstring prefix, std::wstring suffix)
 	if (textMode)
 	{
@@ -226,7 +211,12 @@ CSpinner::CSpinner(const CRect& size, CFrame* frame, CControlListener* listener,
 			widthSub -= (9 * 2);
 
 		CBitmap* font = new CBitmap(PNG_biosFontCaseSensitive_halfres);
-		_text = new CBitmapText(CRect(CPoint(size.getTopLeft().x + 8, size.getTopLeft().y + ((size.getHeight() / 2) - 4)), CPoint(size.getWidth() - widthSub, size.getHeight())), CPoint(12, 12), font);
+
+		if(showButtons)
+			_text = new CBitmapText(CRect(CPoint(size.getTopLeft().x + 8, size.getTopLeft().y + ((size.getHeight() / 2) - 4)), CPoint(size.getWidth() - widthSub, size.getHeight())), CPoint(12, 12), font);
+		else
+			_text = new CBitmapText(CRect(CPoint(size.getTopLeft().x + sCoord(1), size.getTopLeft().y + ((size.getHeight() / 2) - 4)), CPoint(size.getWidth() - sCoord(2), size.getHeight())), CPoint(12, 12), font);
+
 		_text->setAlign(align);
 
 		frame->addView(_text);
@@ -344,6 +334,9 @@ bool CSpinner::onWheel(const CPoint& where, const float& distance, const long& b
 
 CMouseEventResult CSpinner::onMouseDown(CPoint& where, const long& buttons)
 {
+	if (buttons & kRButton)
+		return CView::onMouseDown(where, buttons);
+
 	if (_text != nullptr)
 	{
 		ParameterStringSelection* sel = dynamic_cast<ParameterStringSelection*>(getParameter());
@@ -366,4 +359,70 @@ CMouseEventResult CSpinner::onMouseDown(CPoint& where, const long& buttons)
 	}
 
 	return CMouseEventResult::kMouseEventHandled;
+}
+
+
+float GraphPart::getWidthValue()
+{
+	if (widthParam != nullptr)
+		return widthParam->getNormalized();
+
+	return fixedWidth;
+}
+float GraphPart::getHeightValue()
+{
+	if (heightParam != nullptr)
+		return heightParam->getNormalized();
+
+	return fixedHeight;
+}
+
+CGraph::CGraph(const CRect& size)
+	: CView(size)
+{
+	
+}
+
+
+void CGraph::setParameter(PlugParameter* param)
+{
+	//if (param != nullptr && _lockText == false)
+	//	setText(param->toString());
+
+	CBaseObject::setParameter(param);
+}
+
+void CGraph::draw(CDrawContext* context)
+{
+	float totalWidthTaken = 0.0f;
+	for(int i = 0; i < parts.size(); i++)
+	{
+		totalWidthTaken += parts[i].getWidthValue();
+	}
+
+	context->setFrameColor(MakeCColor(255, 255, 255, 255));
+	context->setLineStyle(kLineSolid);
+	context->setLineWidth(3);
+	
+	CPoint position = this->getViewSize().getTopLeft();
+	CPoint size = this->getViewSize().getSize();
+
+	float widthMul = (float)1.0f / totalWidthTaken;
+	CPoint prevPoint = CPoint(0, 1.0f);
+	for (int i = 0; i < parts.size(); i++)
+	{
+		GraphPart& p = parts[i];
+		CPoint nextPoint = CPoint(prevPoint.x + (p.getWidthValue() * widthMul), 1.0f - p.getHeightValue());
+
+
+		CPoint p1 = position + CPoint(prevPoint.x * size.x, prevPoint.y * size.y);
+		CPoint p2 = position + CPoint(nextPoint.x * size.x, nextPoint.y * size.y);
+
+		context->moveTo(p1);
+		context->lineTo(p2);
+
+		prevPoint = nextPoint;
+	}
+
+	setDirty(false);
 }

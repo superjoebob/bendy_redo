@@ -147,13 +147,34 @@ CControl::~CControl ()
 {
 }
 
+
+void CControl::setValue(float val) 
+{
+	value = val; 
+
+	if (_showingTooltip)
+		updateTooltip(true);
+}
+
 void CControl::setParameter(PlugParameter* param)
 {
+	if (param == nullptr)
+		return;
+
 	setTag(param->hash);
 	setMax(param->getMax());
 	setMin(param->getMin());
-	setValue(param->getFloat());
+
+	float val = param->getFloat();
+	if (val > getMax())
+		val = getMax();
+	if (val < getMin())
+		val = getMin();
+
+	setValue(val);
 	setWheelInc(param->getInc());
+
+	invalid();
 	CBaseObject::setParameter(param);
 }
 
@@ -178,6 +199,9 @@ void CControl::endEdit ()
 		getFrame ()->endEdit (tag);
 	if (listener)
 		listener->controlEndEdit (this);
+
+	if (_showingTooltip)
+		updateTooltip(true);
 }
 
 //------------------------------------------------------------------------
@@ -201,6 +225,9 @@ void CControl::setDirty (const bool val)
 	}
 	else
 		oldValue = value;
+
+	if (_showingTooltip)
+		updateTooltip(true);
 }
 
 //------------------------------------------------------------------------
@@ -365,6 +392,9 @@ void COnOffButton::mouse (CDrawContext *pContext, CPoint& where, long button)
 //------------------------------------------------------------------------
 CMouseEventResult COnOffButton::onMouseDown (CPoint& where, const long& buttons)
 {
+	if (buttons & kRButton)
+		return CView::onMouseDown(where, buttons);
+
 	if (!(buttons & kLButton))
 		return kMouseEventNotHandled;
 
@@ -378,8 +408,11 @@ CMouseEventResult COnOffButton::onMouseDown (CPoint& where, const long& buttons)
 		beginEdit ();
 	
 		listener->valueChanged (this);
-		if (_param != nullptr)
-			_param->setNormalized(value);
+		//if (_param != nullptr)
+		//{
+		//	
+		//	_param->setNormalized(value);
+		//}
 	
 		// end of edit parameter
 		endEdit ();
@@ -393,8 +426,8 @@ CMouseEventResult COnOffButton::onMouseDown (CPoint& where, const long& buttons)
 		beginEdit ();
 	
 		listener->valueChanged (this);
-		if (_param != nullptr)
-			_param->setNormalized(value);
+		//if (_param != nullptr)
+		//	_param->setNormalized(value);
 	
 		// end of edit parameter
 		endEdit ();
@@ -633,6 +666,9 @@ void CKnob::mouse (CDrawContext *pContext, CPoint& where, long button)
 //------------------------------------------------------------------------
 CMouseEventResult CKnob::onMouseDown (CPoint& where, const long& buttons)
 {
+	if (buttons & kRButton)
+		return CView::onMouseDown(where, buttons);
+
 	beginEdit ();
 
 	if (checkDefaultValue (buttons))

@@ -214,11 +214,11 @@ struct CPoint;
 		{ return (!strcmp (s, (#name))) ? true : parent::isTypeOf (s); } \
 	virtual CView* newCopy () const = 0;
 
-#ifdef VSTGUI_FLOAT_COORDINATES
+//#ifdef VSTGUI_FLOAT_COORDINATES
 typedef double CCoord;
-#else
-typedef long CCoord;
-#endif
+//#else
+//typedef long CCoord;
+//#endif
 
 //-----------------------------------------------------------------------------
 //! \brief Rect structure
@@ -1106,8 +1106,9 @@ public:
 	virtual CMouseEventResult onMouseUp (CPoint &where, const long& buttons);											///< called when a mouse up event occurs
 	virtual CMouseEventResult onMouseMoved (CPoint &where, const long& buttons);										///< called when a mouse move event occurs
 
-	virtual CMouseEventResult onMouseEntered (CPoint &where, const long& buttons) {return kMouseEventNotImplemented;}	///< called when the mouse enters this view
-	virtual CMouseEventResult onMouseExited (CPoint &where, const long& buttons) {return kMouseEventNotImplemented;}	///< called when the mouse leaves this view
+	virtual CMouseEventResult onMouseEntered(CPoint& where, const long& buttons);										///< called when the mouse enters this view
+	virtual CMouseEventResult onMouseExited(CPoint& where, const long& buttons);										///< called when the mouse leaves this view
+	void updateTooltip(bool show);
 	
 	virtual bool hitTest (const CPoint& where, const long buttons = -1) { return where.isInside (mouseableArea); }		///< check if where hits this view
 
@@ -1234,6 +1235,8 @@ protected:
 	bool  bWantsFocus;
 	bool  bIsAttached;
 	bool  bVisible;
+
+	bool _showingTooltip;
 	
 	long  autosizeFlags;
 	

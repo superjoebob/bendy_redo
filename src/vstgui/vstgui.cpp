@@ -36,6 +36,9 @@
 #include "vstgui.h"
 #endif
 
+#include "PluginGUI.h"
+#include "Parameter.h"
+
 #if ENABLE_VST_EXTENSION_IN_VSTGUI
 #include "audioeffectx.h"
 #include "aeffguieditor.h"
@@ -3087,6 +3090,7 @@ CView::CView (const CRect& size)
 , pBackground (0)
 , pAttributeList (0)
 , autosizeFlags (kAutosizeNone)
+, _showingTooltip(false)
 {
 	#if DEBUG
 	gNbCView++;
@@ -3109,6 +3113,7 @@ CView::CView (const CView& v)
 , pBackground (v.pBackground)
 , pAttributeList (0)
 , autosizeFlags (v.autosizeFlags)
+, _showingTooltip(false)
 {
 	if (pBackground)
 		pBackground->remember ();
@@ -3183,6 +3188,12 @@ bool CView::removed (CView* parent)
  */
 CMouseEventResult CView::onMouseDown (CPoint &where, const long& buttons)
 {
+	if (_param != nullptr && buttons & kRButton)
+	{
+		((PluginGUI*)getEditor())->showDefaultControlMenu(_param, false);
+		return kMouseEventHandled;
+	}
+
 	return kMouseEventNotImplemented;
 }
 
@@ -3205,7 +3216,40 @@ CMouseEventResult CView::onMouseUp (CPoint &where, const long& buttons)
  */
 CMouseEventResult CView::onMouseMoved (CPoint &where, const long& buttons)
 {
+	//if (_param != nullptr)
+	//	((PluginGUI*)getEditor())->showTooltip(_param->name + L": " + _param->toString());
+
 	return kMouseEventNotImplemented;
+}
+
+CMouseEventResult CView::onMouseEntered(CPoint& where, const long& buttons)
+{
+	updateTooltip(true);
+	return kMouseEventNotImplemented; 
+}
+
+CMouseEventResult CView::onMouseExited(CPoint& where, const long& buttons)
+{
+	updateTooltip(false);
+	return kMouseEventNotImplemented; 
+}
+
+void CView::updateTooltip(bool show)
+{
+	PluginGUI* editor = (PluginGUI*)getEditor();
+	if (editor == nullptr || _param == nullptr)
+		return;
+
+	if (!show)
+	{
+		editor->showTooltip(L"");
+		_showingTooltip = false;
+	}
+	else
+	{
+		editor->showTooltip(_param->name + L": " + _param->toString());
+		_showingTooltip = true;
+	}
 }
 
 #if VSTGUI_ENABLE_DEPRECATED_METHODS
@@ -4247,7 +4291,16 @@ CMouseEventResult CFrame::onMouseDown (CPoint &where, const long& buttons)
 	mouseDownView = 0;
 	if (pFocusView)
 		setFocusView (NULL);
-	if (pMouseOverView)
+
+	//DANGER, BENDY MOUSE CHANGE
+	//if (pMouseOverView)
+	//{
+	//	pMouseOverView->onMouseExited (where, buttons);
+	//	if (getMouseObserver ())
+	//		getMouseObserver ()->onMouseExited (pMouseOverView, this);
+	//	pMouseOverView = 0;
+	//}	
+	if (pMouseOverView && (buttons & kRButton))
 	{
 		pMouseOverView->onMouseExited (where, buttons);
 		if (getMouseObserver ())
@@ -4687,31 +4740,32 @@ bool CFrame::setSize (CCoord width, CCoord height)
 	
 	hTempWnd = (HWND)pHwnd;
 	
-	while ((diffWidth != iFrame) && (hTempWnd != NULL)) // look for FrameWindow
-	{
-		HWND hTempParentWnd = GetParent (hTempWnd);
-		TCHAR buffer[1024];
-		GetClassName (hTempParentWnd, buffer, 1024);
-		if (!hTempParentWnd || !VSTGUI_STRCMP (buffer, TEXT("MDIClient")))
-			break;
-		GetWindowRect (hTempWnd, &rctTempWnd);
-		GetWindowRect (hTempParentWnd, &rctParentWnd);
-		
-		SetWindowPos (hTempWnd, HWND_TOP, 0, 0, (int)width + diffWidth, (int)height + diffHeight, SWP_NOMOVE);
-		
-		diffWidth  += (rctParentWnd.right - rctParentWnd.left) - (rctTempWnd.right - rctTempWnd.left);
-		diffHeight += (rctParentWnd.bottom - rctParentWnd.top) - (rctTempWnd.bottom - rctTempWnd.top);
-		
-		if ((diffWidth > 80) || (diffHeight > 80)) // parent belongs to host
-			return true;
+	//DANGER BENDY CHANGE
+	//while ((diffWidth != iFrame) && (hTempWnd != NULL)) // look for FrameWindow
+	//{
+	//	HWND hTempParentWnd = GetParent (hTempWnd);
+	//	TCHAR buffer[1024];
+	//	GetClassName (hTempParentWnd, buffer, 1024);
+	//	if (!hTempParentWnd || !VSTGUI_STRCMP (buffer, TEXT("MDIClient")))
+	//		break;
+	//	GetWindowRect (hTempWnd, &rctTempWnd);
+	//	GetWindowRect (hTempParentWnd, &rctParentWnd);
+	//	
+	//	SetWindowPos (hTempWnd, HWND_TOP, 0, 0, (int)width + diffWidth, (int)height + diffHeight, SWP_NOMOVE);
+	//	
+	//	diffWidth  += (rctParentWnd.right - rctParentWnd.left) - (rctTempWnd.right - rctTempWnd.left);
+	//	diffHeight += (rctParentWnd.bottom - rctParentWnd.top) - (rctTempWnd.bottom - rctTempWnd.top);
+	//	
+	//	if ((diffWidth > 80) || (diffHeight > 80)) // parent belongs to host
+	//		return true;
 
-		if (diffWidth < 0)
-			diffWidth = 0;
-        if (diffHeight < 0)
-			diffHeight = 0;
-		
-		hTempWnd = hTempParentWnd;
-	}
+	//	if (diffWidth < 0)
+	//		diffWidth = 0;
+ //       if (diffHeight < 0)
+	//		diffHeight = 0;
+	//	
+	//	hTempWnd = hTempParentWnd;
+	//}
 	
 	if (hTempWnd)
 		SetWindowPos (hTempWnd, HWND_TOP, 0, 0, (int)width + diffWidth, (int)height + diffHeight, SWP_NOMOVE);

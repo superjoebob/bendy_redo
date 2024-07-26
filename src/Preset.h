@@ -1,13 +1,15 @@
 #pragma once
 #include "Parameter.h"
+
 struct Preset : Serializable
 {
 	Preset();
-	virtual void serialize(StreamWrapper* s) override;
-	virtual void deserialize(StreamWrapper* s) override;
-	virtual void legacy_deserialize(StreamWrapper* s) override;
+	virtual void serialize(Stream* s) override;
+	virtual void deserialize(Stream* s) override;
+	virtual void legacy_deserialize(Stream* s) override;
 
-	std::wstring name;
+	std::wstring presetName;
+	std::map<int, std::wstring> noteNames;
 	ParameterInt range;
 	ParameterIntList midiKnobValue;
 	ParameterMidiCCList midiKnobCC;

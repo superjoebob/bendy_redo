@@ -155,15 +155,16 @@ State::State():
 	midiBankFine(L"MIDI Bank Fine", L"midiBankFine", 0, 0, 127),
 	vibratoEnabled(L"Enable Vibrato", L"vibratoEnabled", true),
 	vibratoSpeed(L"Vibrato Speed", L"vibratoSpeed", 0, 0, 8.0f),
-	vibratoDepth(L"Vibrato Pitch Depth", L"vibratoDepth", 0, 0, 2.0f),
-	presets(nullptr)
+	vibratoDepth(L"Vibrato Pitch Depth", L"vibratoDepth", 0, 0, 2.0f)
 {
     map(&currentPresetIndex);
     map(&assignedNoteControls);
     map(&assignedPartialNoteControls);
 
     map(&channel);
+    channel.midiTrigger = MidiTrigger::BankChange;
     map(&port);
+    port.midiTrigger = MidiTrigger::BankChange | MidiTrigger::PortChange;
     map(&enableNoteTrigger);
     map(&enableNoteVelocity);
     map(&enableNotePanning);
@@ -174,45 +175,39 @@ State::State():
     map(&harmonyKey);
     map(&harmonyType);
     map(&midiPatch);
+    midiPatch.midiTrigger = MidiTrigger::BankChange;
     map(&midiBankCoarse);
+    midiBankCoarse.midiTrigger = MidiTrigger::BankChange;
     map(&midiBankFine);
+    midiBankFine.midiTrigger = MidiTrigger::BankChange;
     map(&vibratoEnabled);
     map(&vibratoSpeed);
     map(&vibratoDepth);
 
-    map(&currentPreset);
-
+    map(&preset);
+    assign_indexes();
 
     root = true;
 }
 
 State::~State() { cleanup(); }
-void State::serialize(StreamWrapper* s)
+void State::serialize(Stream* s)
 {
 	s->writeInt(versionMajor);
 	s->writeInt(versionMinor);
 	Serializable::serialize(s);
-	s->writeInt(0);//no presets yet
 }
 
-void State::deserialize(StreamWrapper* s)
+void State::deserialize(Stream* s)
 {
     cleanup(); //get rid of existing data
     versionMajor = s->readInt();
     versionMinor = s->readInt();
 
     Serializable::deserialize(s);
-
-    int numPresets = s->readInt();
-    presets = new Preset * [numPresets];
-    for (int i = 0; i < numPresets; i++)
-    {
-        presets[i] = new Preset();
-        presets[i]->deserialize(s);
-    }
 }
 
-void State::legacy_deserialize(StreamWrapper* s)
+void State::legacy_deserialize(Stream* s)
 {
 	cleanup(); //get rid of existing data
 	versionMajor = s->readInt();
@@ -221,19 +216,38 @@ void State::legacy_deserialize(StreamWrapper* s)
 	Serializable::legacy_deserialize(s);
 
 	int numPresets = s->readInt();
-	presets = new Preset * [numPresets];
+    Preset** presets = new Preset * [numPresets];
 	for (int i = 0; i < numPresets; i++)
 	{
 		presets[i] = new Preset();
 		presets[i]->legacy_deserialize(s);
 	}
+
+    //Map legacy indexes for hooking up parameters later
+    for (auto it = all.begin(); it != all.end(); it++)
+    {
+        if ((*it)->legacyFixedIndex != -1)
+            _legacyIndexMap[(*it)->legacyFixedIndex] = (*it);
+    }
+
+    //Replace legacy indexes with hashes
+    for (int i = 0; i < 2; i++)
+    {
+        unsigned int legacyIndex = assignedNoteControls[i].linkHash;
+        auto legit = _legacyIndexMap.find((unsigned short)legacyIndex);
+        if (legit != _legacyIndexMap.end())
+            assignedNoteControls[i].linkHash = (*legit).second->hash;
+    } 
+    
+    for (int i = 0; i < 4; i++)
+    {
+        unsigned int legacyIndex = assignedPartialNoteControls[i].linkHash;
+        auto legit = _legacyIndexMap.find((unsigned short)legacyIndex);
+        if (legit != _legacyIndexMap.end())
+            assignedPartialNoteControls[i].linkHash = (*legit).second->hash;
+    }
 }
 
 void State::cleanup()
 {
-	if (presets != nullptr)
-	{
-		delete[] presets;
-		presets = nullptr;
-	}
 }

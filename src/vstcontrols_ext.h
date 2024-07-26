@@ -2,6 +2,7 @@
 #include "vstcontrols.h"
 #include <string>
 #include <algorithm>
+#include <vector>
 
 class Plugin;
 //struct ControlPair
@@ -81,4 +82,36 @@ private:
 	CBitmapText* _text;
 	CControlListener* _listener;
 	//ControlPair _control;
+};
+
+
+struct GraphPart
+{
+	GraphPart()
+		:widthParam(nullptr),
+		heightParam(nullptr),
+		fixedWidth(0),
+		fixedHeight(0)
+	{
+
+	}
+	PlugParameter* widthParam;
+	PlugParameter* heightParam;
+	float fixedWidth;
+	float fixedHeight;
+
+	float getWidthValue();
+	float getHeightValue();
+};
+
+class CGraph : public CView
+{
+public:
+	CGraph(const CRect& size);
+
+	virtual void setParameter(PlugParameter* param) override;
+	virtual void draw(CDrawContext* context) override;
+	CLASS_METHODS(CGraph, CView)
+
+	std::vector<GraphPart> parts;
 };

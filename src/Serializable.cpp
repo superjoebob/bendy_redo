@@ -6,7 +6,9 @@
 Serializable::Serializable(std::wstring readableName, std::wstring id) :
 	name(readableName),
 	id(id),
-	root(false)
+	root(false),
+	legacyFixedIndex(-1),
+	index(-1)
 {
 	//setup converter
 	using convert_type = std::codecvt_utf8<wchar_t>;
@@ -16,12 +18,12 @@ Serializable::Serializable(std::wstring readableName, std::wstring id) :
 	hash = crc32buf((char*)converted_str.c_str(), sizeof(char) * id.length());
 }
 
-void Serializable::serialize(StreamWrapper* s)
+void Serializable::serialize(Stream* s)
 {
 	serialize_children(s);
 }
 
-void Serializable::serialize_children(StreamWrapper* s)
+void Serializable::serialize_children(Stream* s)
 {
 	for (auto it = children.begin(); it != children.end(); it++)
 	{
@@ -44,7 +46,7 @@ void Serializable::serialize_children(StreamWrapper* s)
 	s->writeUInt(0);
 }
 
-void Serializable::deserialize(StreamWrapper* s)
+void Serializable::deserialize(Stream* s)
 {
 	unsigned int childID = s->readUInt();
 	while (childID != 0)
@@ -60,7 +62,7 @@ void Serializable::deserialize(StreamWrapper* s)
 	}
 }
 
-void Serializable::legacy_deserialize(StreamWrapper* s)
+void Serializable::legacy_deserialize(Stream* s)
 {
 	unsigned int childID = s->readUInt();
 	while (childID != 0)
@@ -71,9 +73,9 @@ void Serializable::legacy_deserialize(StreamWrapper* s)
 			s->advance(paramSize); //could not find child
 		else
 		{
-			unsigned short fixedIndex = 0;
+			//legacyFixedIndex is used for re-assigning note controls later
 			if (root)
-				fixedIndex = s->readUShort(); //unused??
+				(*it).second->legacyFixedIndex = s->readUShort(); 
 
 			(*it).second->root = root;
 			(*it).second->legacy_deserialize(s);
@@ -95,4 +97,13 @@ void Serializable::map(Serializable* child)
 		hashmap[(*it)->hash] = (*it);
 		all.push_back((*it));
 	}	
+}
+
+void Serializable::assign_indexes()
+{
+	for (int i = 0; i < all.size(); i++)
+	{
+		all[i]->index = i;
+		indexmap[all[i]->hash] = i;
+	}
 }

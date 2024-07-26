@@ -6,9 +6,9 @@ struct State : Serializable
 {
 	State();
 	~State();
-	virtual void serialize(StreamWrapper* s) override;
-	virtual void deserialize(StreamWrapper* s) override;
-	virtual void legacy_deserialize(StreamWrapper* s) override;
+	virtual void serialize(Stream* s) override;
+	virtual void deserialize(Stream* s) override;
+	virtual void legacy_deserialize(Stream* s) override;
 
 	int versionMajor;
 	int versionMinor;
@@ -38,9 +38,9 @@ struct State : Serializable
 	ParameterFloat vibratoSpeed;
 	ParameterFloat vibratoDepth;
 
-	Preset** presets;
-	Preset currentPreset;
+	Preset preset;
 
 private:
 	void cleanup();
+	std::map<unsigned short, Serializable*> _legacyIndexMap;
 };

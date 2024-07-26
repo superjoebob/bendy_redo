@@ -1,6 +1,43 @@
 #pragma once
 #include "Serializable.h"
 #include <vector>
+
+enum class MidiTrigger
+{
+	None = 0,
+	BankChange = 1,
+	PortChange = 2,
+	MidiParameterChange = 4
+}; 
+
+inline MidiTrigger operator|(MidiTrigger a, MidiTrigger b)
+{
+	return static_cast<MidiTrigger>(static_cast<int>(a) | static_cast<int>(b));
+}
+
+inline MidiTrigger operator&(MidiTrigger a, MidiTrigger b)
+{
+	return static_cast<MidiTrigger>(static_cast<int>(a) & static_cast<int>(b));
+}
+
+struct ParameterInt;
+struct ParameterMidiCC;
+struct ParameterBool;
+struct MidiCluster
+{
+	MidiCluster()
+		:value(nullptr),
+		cc(nullptr),
+		enabled(nullptr)
+	{
+
+	}
+	ParameterInt* value;
+	ParameterMidiCC* cc;
+	ParameterBool* enabled;
+	bool shouldTrigger();
+};
+
 struct PlugParameter : Serializable
 {
 	PlugParameter(std::wstring name, std::wstring id);
@@ -11,14 +48,32 @@ struct PlugParameter : Serializable
 	virtual float getFloat() { return 0.0f; };
 	virtual void setFloat(float val) { };
 
-	float getNormalized() { return (getFloat() - getMin()) / (float)(getMax() - getMin()); };
-	void setNormalized(float value) { setFloat(getMin() + (value * (getMax() - getMin()))); };
+	virtual void* get4ByteValue() { return 0; };
+	virtual void set4ByteValue(void* val) {  };
+
+
+	/// <summary>
+	/// Converts a normalized value to be within the range of this paramter's values
+	/// </summary>
+	/// <param name="value">A value between 0.0f and 1.0f</param>
+	/// <returns>That value expanded to be between getMin() and getMax()</returns>
+	float normalizedToRange(float value) { return getMin() + (value * (getMax() - getMin())); };
+	float rangeToNormalized(float value) { return (value - getMin()) / (float)(getMax() - getMin()); };
+	float getNormalized() { return (getFloat() - getMin()) / (float)(getMax() - getMin()); }
+
 
 	virtual float getInc() { return 1; };
 	virtual float getMin() { return 0; }
 	virtual float getMax() { return 1; }
 
+	virtual void setMin(float val) { ; }
+	virtual void setMax(float val) { ; }
+
+	virtual bool isFloatingPoint() { return false; }
+
 	bool canSetRange;
+	MidiTrigger midiTrigger;
+	MidiCluster midi;
 };
 
 struct ParameterLink : PlugParameter
@@ -26,16 +81,18 @@ struct ParameterLink : PlugParameter
 	ParameterLink(std::wstring name, std::wstring id);
 
 	virtual void setFromString(std::wstring value) { value = _wtoi(value.c_str()); }
-	virtual std::wstring toString() { return std::to_wstring(index); }
+	virtual std::wstring toString() { return std::to_wstring(linkHash); }
 
-	virtual void serialize(StreamWrapper* s);
-	virtual void deserialize(StreamWrapper* s);
-	virtual void legacy_deserialize(StreamWrapper* s);
+	virtual void serialize(Stream* s);
+	virtual void deserialize(Stream* s);
+	virtual void legacy_deserialize(Stream* s);
 
-	virtual float getFloat() override { return this->index; };
-	virtual void setFloat(float value) override { this->index = value; };
+	virtual void* get4ByteValue() override { return &this->linkHash; };
+	virtual void set4ByteValue(void* val) override { linkHash = *((unsigned int*)val); };
+	virtual float getFloat() override { return *((float*)(&this->linkHash)); };
+	virtual void setFloat(float value) override { this->linkHash = *((unsigned int*)&value); };
 
-	unsigned short index;
+	unsigned int linkHash;
 };
 
 template <typename T>
@@ -44,23 +101,34 @@ struct ParameterList : PlugParameter
 	ParameterList(std::wstring name, std::wstring id);
 	virtual void setFromString(std::wstring value);
 	virtual std::wstring toString();
-	T** list;
+
+	T& operator [] (int i) { return _list[i]; }
+
 protected:
 	int _count;
+	std::vector<T> _list;
+	void initialize_map()
+	{
+		//Need to do this at the end, since references taken to vector elements become invalid
+		//if the list changes size (ie if things are added later)
+		for (int i = 0; i < _list.size(); i++)
+		{
+			map(&_list[i]);
+		}
+	}
 };
 
 struct ParameterLinkList : ParameterList<ParameterLink>
 {
 	ParameterLinkList(std::wstring name, std::wstring id, int num);
-	~ParameterLinkList();
 };
 
 struct ParameterFloat : PlugParameter
 {
 	ParameterFloat(std::wstring name, std::wstring id, float value, float min, float max);
-	virtual void serialize(StreamWrapper* s);
-	virtual void deserialize(StreamWrapper* s);
-	virtual void legacy_deserialize(StreamWrapper* s);
+	virtual void serialize(Stream* s);
+	virtual void deserialize(Stream* s);
+	virtual void legacy_deserialize(Stream* s);
 	virtual void setFromString(std::wstring value) 
 	{
 		value = _wtof(value.c_str()); 
@@ -71,26 +139,37 @@ struct ParameterFloat : PlugParameter
 	}
 	virtual std::wstring toString() { return std::to_wstring(value); }
 
+	virtual bool isFloatingPoint() override { return true; }
+
+	virtual void* get4ByteValue() override { return &value; };
+	virtual void set4ByteValue(void* val) override { value = *((float*)val); };
 	virtual float getFloat() override { return this->value; };
 	virtual void setFloat(float value) override { this->value = value; };
+
 	virtual float getInc() override { return 0.1f; };
 
 	virtual float getMin() override { return _min; }
-	int setMin(int val)
+	virtual void setMin(float val) override
 	{
 		if (_min != val)
 			_minMaxSet = true;
 
 		_min = val;
+
+		if (value < _min)
+			value = _min;
 	}
 
 	virtual float getMax() override { return _max; }
-	int setMax(int val)
+	virtual void setMax(float val) override
 	{
 		if (_max != val)
 			_minMaxSet = true;
 
 		_max = val;
+
+		if (value > _max)
+			value = _max;
 	}
 
 	float value;
@@ -104,10 +183,12 @@ private:
 struct ParameterInt : PlugParameter
 {
 	ParameterInt(std::wstring name, std::wstring id, int value, int min, int max);
-	virtual void serialize(StreamWrapper* s);
-	virtual void deserialize(StreamWrapper* s);
-	virtual void legacy_deserialize(StreamWrapper* s);
+	virtual void serialize(Stream* s);
+	virtual void deserialize(Stream* s);
+	virtual void legacy_deserialize(Stream* s);
 
+	virtual void* get4ByteValue() override { return &value; };
+	virtual void set4ByteValue(void* val) override { value = *((int*)val); };
 	virtual float getFloat() override { return this->value; };
 	virtual void setFloat(float value) override { this->value = value; };
 
@@ -125,21 +206,27 @@ struct ParameterInt : PlugParameter
 	int value;
 
 	virtual float getMin() override { return _min; }
-	int setMin(int val) 
+	virtual void setMin(float val) override
 	{
 		if (_min != val)
 			_minMaxSet = true;
 
 		_min = val;
+
+		if (value < _min)
+			value = _min;
 	}	
 	
 	virtual float getMax() override { return _max; }
-	int setMax(int val)
+	virtual void setMax(float val) override
 	{
 		if (_max != val)
 			_minMaxSet = true;
 
 		_max = val;
+
+		if (value > _max)
+			value = _max;
 	}
 
 private:
@@ -151,7 +238,6 @@ private:
 struct ParameterIntList : ParameterList<ParameterInt>
 {
 	ParameterIntList(std::wstring name, std::wstring id, int num, int value, int min, int max);
-	~ParameterIntList();
 };
 
 struct ParameterMidiCC : ParameterInt
@@ -162,7 +248,6 @@ struct ParameterMidiCC : ParameterInt
 struct ParameterMidiCCList : ParameterList<ParameterMidiCC>
 {
 	ParameterMidiCCList(std::wstring name, std::wstring id, int num, int value);
-	~ParameterMidiCCList();
 };
 
 struct ParameterString : PlugParameter
@@ -171,24 +256,23 @@ struct ParameterString : PlugParameter
 	virtual void setFromString(std::wstring value) { this->value = value; }
 	virtual std::wstring toString() { return value; }
 
-	virtual void serialize(StreamWrapper* s);
-	virtual void deserialize(StreamWrapper* s);
-	virtual void legacy_deserialize(StreamWrapper* s);
+	virtual void serialize(Stream* s);
+	virtual void deserialize(Stream* s);
+	virtual void legacy_deserialize(Stream* s);
 	std::wstring value;
 };
 
 struct ParameterStringList : ParameterList<ParameterString>
 {
 	ParameterStringList(std::wstring name, std::wstring id, int num, std::wstring value);
-	~ParameterStringList();
 };
 
 struct ParameterBool : PlugParameter
 {
 	ParameterBool(std::wstring name, std::wstring id, bool value);
-	virtual void serialize(StreamWrapper* s);
-	virtual void deserialize(StreamWrapper* s);
-	virtual void legacy_deserialize(StreamWrapper* s);
+	virtual void serialize(Stream* s);
+	virtual void deserialize(Stream* s);
+	virtual void legacy_deserialize(Stream* s);
 
 	virtual void setFromString(std::wstring value) 
 	{
@@ -199,16 +283,17 @@ struct ParameterBool : PlugParameter
 	}
 	virtual std::wstring toString() { return value ? L"1" : L"0"; }
 
+	virtual void* get4ByteValue() override { return &value; };
+	virtual void set4ByteValue(void* val) override { value = *((int*)val); };
 	virtual float getFloat() override { return this->value ? 1.0f : 0.0f; };
 	virtual void setFloat(float value) override { this->value = value > 0.5f ? true : false; };
 
-	bool value;
+	int value;
 };
 
 struct ParameterBoolList : ParameterList<ParameterBool>
 {
 	ParameterBoolList(std::wstring name, std::wstring id, int num, bool value);
-	~ParameterBoolList();
 };
 
 struct ParameterStringSelection : ParameterInt
