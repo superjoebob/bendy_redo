@@ -112,6 +112,7 @@
 #endif
 
 struct PlugParameter;
+class Plugin;
 
 //----------------------------------------------------
 //----------------------------------------------------
@@ -639,7 +640,7 @@ enum CViewAutosizing
 class CBaseObject
 {
 public:
-	CBaseObject () : nbReference (1) {}
+	CBaseObject () : nbReference (1), _parameterHash(0), _plug(nullptr) {}
 	virtual ~CBaseObject () {}
 
 	//-----------------------------------------------------------------------------
@@ -658,13 +659,14 @@ public:
 	virtual CMessageResult notify (CBaseObject* sender, const char* message) { return kMessageUnknown; }
 	//@}
 
-	PlugParameter* getParameter() { return _param; }
-	virtual void setParameter(PlugParameter* param) { _param = param; }
+	PlugParameter* getParameter();
+	virtual void setParameter(PlugParameter* param, Plugin* plug);
 
 private:
 	long nbReference;
 protected:
-	PlugParameter* _param;
+	int _parameterHash;
+	Plugin* _plug;
 };
 
 //-----------------------------------------------------------------------------

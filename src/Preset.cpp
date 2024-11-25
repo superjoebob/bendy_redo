@@ -6,13 +6,15 @@ Preset::Preset() :
 	midiKnobValue(L"CC Knob", L"midiKnobValue", 8, -1, 0, 127),
 	midiKnobCC(L"Midi Automation", L"midiKnobCC", 8, 0),
 	midiKnobName(L"Midi Automation Name", L"midiKnobName", 8, L"NO NAME"),
-	midiKnobEnabled(L"CC Enable ", L"midiKnobEnabled", 8, false),
-	asdrCCEnable(L"Enable ASDR CC", L"asdrCCEnable", false),
+	midiKnobEnabled(L"CC Enable ", L"midiKnobEnabled", 8, -1),
+	asdrCCEnable(L"Enable ASDR CC", L"asdrCCEnable", -1),
 	asdrCCName(L"ASDR CC Name", L"asdrCCName", L"ASDR CC"),
 	asdrCCValue(L"Midi ASDR Automation", L"asdrCCValue", 4, 0, 0, 127),
 	asdrCC(L"Midi ASDR Automation CC", L"asdrCC", 4, 0)
 {
 	map(&range);
+	range.midiTrigger = MidiTrigger::BendRangeChange;
+
 	map(&midiKnobValue);
 	map(&midiKnobCC);
 	map(&midiKnobName);
@@ -29,18 +31,23 @@ Preset::Preset() :
 	{
 		c.cc = &midiKnobCC[i];
 		c.value = &midiKnobValue[i];
+		c.name = &midiKnobName[i];
 		c.enabled = &midiKnobEnabled[i];
 
-		midiKnobCC[i].midi = c;
-		midiKnobCC[i].midiTrigger = MidiTrigger::MidiParameterChange;
 		midiKnobValue[i].midi = c;
 		midiKnobValue[i].midiTrigger = MidiTrigger::MidiParameterChange;
+		midiKnobCC[i].midi = c;
+		midiKnobCC[i].midiTrigger = MidiTrigger::MidiParameterChange;
+		midiKnobName[i].midi = c;
+		midiKnobName[i].midiTrigger = MidiTrigger::MidiParameterChange;
 		midiKnobEnabled[i].midi = c;
 		midiKnobEnabled[i].midiTrigger = MidiTrigger::MidiParameterChange;
 	}
 
 	c.enabled = &asdrCCEnable;
+	c.name = &asdrCCName;
 	asdrCCEnable.midi = c;
+	asdrCCName.midi = c;
 	for (int i = 0; i < 4; i++)
 	{
 		c.cc = &asdrCC[i];

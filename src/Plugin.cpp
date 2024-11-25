@@ -2,6 +2,8 @@
 #include "PluginGUI.h"
 #include "State.h"
 #include "StreamWrapper.h"
+#include <codecvt>
+#include <locale>
 extern "C" TFruityPlug * _stdcall CreatePlugInstance(TFruityPlugHost * Host, int Tag)
 {
 	FruityPlugInfo info;
@@ -13,9 +15,9 @@ extern "C" TFruityPlug * _stdcall CreatePlugInstance(TFruityPlugHost * Host, int
 TFruityPlugInfo PlugInfo =
 {
 	CurrentSDKVersion,
-	"BENDY",
-	"BENDY",
-	FPF_Type_FullGen // the amount of parameters
+	new char[] { "BENDY" },
+	new char[] { "BENDY" },
+	FPF_Type_Visual | FPF_WantNewTick | FPF_MIDIOut // the amount of parameters
 };
 
 void* hInstance; // used by VSTGUI
@@ -35,7 +37,9 @@ Plugin::Plugin(void* data)
 	Info = &PlugInfo;
 	HostTag = info->Tag;
 	EditorHandle = 0;
+	_masterPitchCents = 0;
 
+	_gui = nullptr;
 	_pulseIndex = 0;
 
 	for (int i = 0; i < 5; i++)
@@ -215,25 +219,33 @@ void _stdcall Plugin::SaveRestoreState(IStream* Stream, BOOL Save)
 		unsigned long written = 0;
 		unsigned long magicNumberRead = 0;
 		Stream->Read(&magicNumberRead, sizeof(unsigned long), &written);
+
+		State* oldState = _state;
 		if (magicNumberRead == legacyMagicNumber)
 		{
 			//deserialize using old synthman logic
 			int streamSize = 0;
 			Stream->Read(&streamSize, sizeof(int), &written);
-			if (_state != nullptr)
-				delete _state;
-
 			_state = new State();
 			_state->legacy_deserialize(s);
 		}
 		else if (magicNumberRead == magicNumber)
 		{
-			if (_state != nullptr)
-				delete _state;
-
 			_state = new State();
 			_state->deserialize(s);
 		}
+
+		if (_gui != nullptr)
+			_gui->reconnect();
+
+		if (oldState != nullptr)
+			delete oldState;
+
+		//if (_gui != nullptr && EditorHandle != 0)
+		//{
+		//	_gui->rebuild(EditorHandle);
+		//	EditorHandle = static_cast<HWND>(_gui->getFrame()->getSystemWindow());
+		//}
 
 		PlugHost->Dispatcher(HostTag, FHD_SetNumPresets, 0, _presets.size());
 		PlugHost->Dispatcher(HostTag, FHD_SetNumParams, 0, _state->all.size());
@@ -254,6 +266,17 @@ enum class AutomationTypeFlags
 	UpdateUIThreaded = 8192,
 	GetValueUI = 524288,
 };
+//
+//std::string utf8_to_string(const char* utf8str, const std::locale& loc)
+//{
+//	// UTF-8 to wstring
+//	std::wstring_convert<std::codecvt_utf8<wchar_t>> wconv;
+//	std::wstring wstr = wconv.from_bytes(utf8str);
+//	// wstring to string
+//	std::vector<char> buf(wstr.size());
+//	std::use_facet<std::ctype<wchar_t>>(loc).narrow(wstr.data(), wstr.data() + wstr.size(), '?', buf.data());
+//	return std::string(buf.data(), buf.size());
+//}
 
 intptr_t _stdcall Plugin::Dispatcher(intptr_t ID, intptr_t Index, intptr_t Value)
 {
@@ -273,10 +296,12 @@ intptr_t _stdcall Plugin::Dispatcher(intptr_t ID, intptr_t Index, intptr_t Value
 	intptr_t r = TCPPFruityPlug::Dispatcher(ID, Index, Value);
 	if (r != 0)
 		return r;
+	if (ID == FPD_SetFocus)
+		return 0; //Causes a lot of debugger breakpoint annoyance
 
-	//if (ID == FPD_UseVoiceLevels)
-	//	return 2; //Plugin supports voice levels for a custom function
-	/*else */if (ID == FPD_ShowEditor)
+	if (ID == FPD_UseVoiceLevels)
+		return 2; //Plugin supports voice levels for a custom function
+	else if (ID == FPD_ShowEditor)
 	{
 		if (Value == 0)
 		{
@@ -294,6 +319,7 @@ intptr_t _stdcall Plugin::Dispatcher(intptr_t ID, intptr_t Index, intptr_t Value
 			PlugHost->Dispatcher(HostTag, FHD_SetNumPresets, 0, _presets.size());
 			PlugHost->Dispatcher(HostTag, FHD_SetNumParams, 0, _state->all.size());
 			PlugHost->Dispatcher(HostTag, FHD_NamesChanged, 0, FPN_Semitone);
+			PlugHost->Dispatcher(HostTag, FHD_WantMIDIInput, 0, 1); 
 
 			// open editor
 			_gui = new PluginGUI(this);
@@ -323,7 +349,7 @@ intptr_t _stdcall Plugin::Dispatcher(intptr_t ID, intptr_t Index, intptr_t Value
 			_state->preset.deserialize(&s2);
 			PlugHost->Dispatcher(HostTag, FHD_ShowEditor, 0, 0);
 			PlugHost->Dispatcher(HostTag, FHD_ShowEditor, 0, 1);
-			
+
 
 			//if (_gui != nullptr)
 			//{
@@ -374,14 +400,18 @@ intptr_t _stdcall Plugin::Dispatcher(intptr_t ID, intptr_t Index, intptr_t Value
 	//else if (ID == FPD_ConvertStringToValue)
 	//{
 	//	PConvertStringToValueData inf = (PConvertStringToValueData)Value;
-	//	std::string s = inf->StringValue;
-	//	std::wstring ws(s.begin(), s.end());
+	//	std::string ansi = utf8_to_string(inf->StringValue, std::locale(".1252"));
 
-	//	PlugParameter* param = getParameterByIndex(inf->ParamIndex);
-	//	if (param != nullptr)
-	//	{
 
-	//	}
+	//	int qq = 1;
+	//	//std::string s = inf->StringValue;
+	//	//std::wstring ws(s.begin(), s.end());
+
+	//	//PlugParameter* param = getParameterByIndex(inf->ParamIndex);
+	//	//if (param != nullptr)
+	//	//{
+
+	//	//}
 	//}
 	return 0;
 }
@@ -419,16 +449,14 @@ int _stdcall Plugin::ProcessParam(int index, int value, int RECFlags)
 		if (intparam != nullptr)
 			value = intparam->value;
 		else
-		{
-			float realVal = param->getFloat();
-			value = *((int*)(&realVal));
-		}
+			value = *((int*)(param->get4ByteValue()));
+
 		didSomething = true;
 	}
 
 	if ((int)type & (int)AutomationTypeFlags::FromMIDI)
 	{
-		value = TranslateMidi(value, (int)param->getMin(), (int)param->getMax());
+		value = TranslateMidi(value, (int)param->getMidiMin(), (int)param->getMidiMax());
 		didSomething = true;
 	}
 
@@ -437,22 +465,37 @@ int _stdcall Plugin::ProcessParam(int index, int value, int RECFlags)
 		int max = param->getMax();
 		if (param != nullptr)
 		{
-			param->setFloat(value);
+			param->set4ByteValue(&value);
+			if (param->refreshCluster && param->midi.enabled != nullptr)
+			{
+				param->refreshCluster = false;
+				_gui->setParameter(param->midi.enabled->hash, 1);
+			}
 
 			if ((param->midiTrigger & MidiTrigger::BankChange) != MidiTrigger::None)
-				UpdateBankChange(_state->channel.value);
+				_midiPatchStatusCache.clear(); //dirty the banks so they re-apply
 
 			if ((param->midiTrigger & MidiTrigger::PortChange) != MidiTrigger::None)
 				_ccHistory.clear();	
 			
 			if ((param->midiTrigger & MidiTrigger::MidiParameterChange) != MidiTrigger::None)
 			{
-				if (param->midi.shouldTrigger())
+				if (param->midi.shouldTrigger() && param->midi.cc != 0)
 				{
 					byte port = (byte)_state->port.value;
 					byte chan = (byte)_state->channel.value - 1;
 					MIDIOut((byte)(176 | chan), param->midi.cc->value, param->midi.value->value, port);
 				}
+			}		
+			
+			if ((param->midiTrigger & MidiTrigger::BendRangeChange) != MidiTrigger::None)
+			{
+				byte port = (byte)_state->port.value;
+				byte chan = (byte)_state->channel.value - 1;
+				MIDIOut((byte)(176 | chan), 0x65, 0, port);
+				MIDIOut((byte)(176 | chan), 0x64, 0, port);
+				MIDIOut((byte)(176 | chan), 0x06, _state->preset.range.value, port);
+				MIDIOut((byte)(176 | chan), 0x26, 0, port);
 			}
 		}
 		didSomething = true;
@@ -469,6 +512,13 @@ int _stdcall Plugin::ProcessParam(int index, int value, int RECFlags)
 		return TCPPFruityPlug::ProcessParam(index, value, RECFlags);
 	
 	return value;
+}
+
+int _stdcall Plugin::ProcessEvent(int EventID, int EventValue, int Flags)
+{
+	if (EventID == FPE_MIDI_Pitch)
+		_masterPitchCents = EventValue;
+	return TCPPFruityPlug::ProcessEvent(EventID, EventValue, Flags);
 }
 
 void _stdcall Plugin::GetName(int Section, int Index, int Value, char* Name)
@@ -501,9 +551,28 @@ void _stdcall Plugin::GetName(int Section, int Index, int Value, char* Name)
 	}
 	else if (Section == FPN_VoiceLevel || Section == FPN_VoiceLevelHint)
 	{
-		//System::String* str = synthman::Plugin$_CE_GetNoteControlName(owner, Index);
-		//if (str != nullptr)
-		//	wcstombs(Name, &str->start_char, (str->length + 1) * 2);
+		std::wstring nm = L"";
+		if (Index >= 0 && Index < 2)
+		{
+			PlugParameter* p = getParameter(_state->assignedNoteControls[Index].linkHash);
+			if (p != nullptr)
+				nm = p->getName();
+			else
+			{
+				p = getParameter(_state->assignedPartialNoteControls[Index * 2].linkHash);
+				if (p != nullptr)
+					nm = p->getName();
+
+				p = getParameter(_state->assignedPartialNoteControls[(Index * 2) + 1].linkHash);
+				if (p != nullptr)
+					nm = nm == L"" ? p->getName() : (nm + L"/" + p->getName());
+			}
+		}
+		
+		if(nm == L"")
+			nm = L"Unassigned Control " + std::to_wstring(Index + 1);
+
+		wcstombs(Name, nm.c_str(), nm.length() + 1);
 	}
 }
 
@@ -548,60 +617,74 @@ byte Plugin::CalculateHarmonic(byte note)
 
 void _stdcall Plugin::Gen_Render(PWAV32FS DestBuffer, int& Length)
 {
+	
+}
+void _stdcall Plugin::NewTick()
+{
+	for (int i = 0; i < _notes.size(); i++)
+	{
+		Note* n = _notes[i];
+		if (n->state == NoteState::Finished || n->state == NoteState::NoteOff)
+		{
+			n->state = NoteState::Finished;
+			PlugHost->Voice_Kill(n->hostTag, true);
+		}
+	}
+
 	for (int i = 0; i < _notes.size(); i++)
 	{
 		//Update note
 		Note* n = _notes[i];
+		if (n->state == NoteState::Finished)
+			continue;
+
 		n->pan = n->params->FinalLevels.Pan;
-		n->volume = n->params->FinalLevels.Vol;
-		n->pitch = n->params->FinalLevels.Pitch /* + thi$->_masterPitchInCents*/;
-		n->control1 = n->params->FinalLevels.FCut;
-		n->control2 = n->params->FinalLevels.FRes;
+		n->velocity = std::fmin(std::sqrtf(n->params->InitLevels.Vol) * 100, 127);
 
-		int realChannel = _state->channel.value + n->channel;
-		if (n->state == NoteState::Finished || n->state == NoteState::NoteOff)
+		if(!_state->legacy)
+			n->channelVolume = std::sqrtf(n->params->FinalLevels.Vol);
+
+		n->pitch = n->params->FinalLevels.Pitch  + _masterPitchCents;
+		if (_state->vibratoEnabled.value)
 		{
-			if (_state->enableNoteTrigger.value)
-				MIDIOut((byte)(128 | (realChannel - 1)), (byte)n->startingNote, (byte)min((n->volume) * 127, 127), (byte)_state->port.value);
-
-			if (n->harmonic != 0 && _state->harmonizerEnabled.value)
-				MIDIOut((byte)(128 | (realChannel - 1)), (byte)n->harmonic, (byte)min((n->volume) * 127, 127), (byte)_state->port.value);
-
-			n->state = NoteState::Finished;
+			n->vibratoSin += _state->vibratoSpeed.value / 8.0f;
+			n->pitch += sin(n->vibratoSin) * (_state->vibratoDepth.value * 100);
 		}
-		else if (n->state == NoteState::NoteOn)
-		{
-			//n->preset = presets[currentPresetIndex.value];
 
+		n->control1 = n->params->FinalLevels.FCut;
+		n->control2 = n->params->FinalLevels.FRes;	
+
+		int realChannel = n->channel;
+		if (n->state == NoteState::NoteOn)
+		{
+			n->initialVelocity = n->velocity;
 			letters[_pulseIndex] = n->hostTag;
 			_pulseIndex = (_pulseIndex + 1) % 5;
 
-			byte midiNote = (byte)((n->pitch / 100) + 60);
-			n->startingNote = midiNote;
 			n->lastPitchDif = 0;
 
 			if (_state->harmonizerEnabled.value)
-				n->harmonic = CalculateHarmonic(midiNote);
+				n->harmonic = CalculateHarmonic(n->startingNote);
 
-			//Trigger Note
-			//---------------------------------------------------------------
-			if (realChannel != _state->channel.value)
-			{
-				UpdateBankChange(realChannel);
-				EnsureCCsForChannel(_state->channel.value, realChannel, (byte)_state->port.value);
-			}
-
+			UpdateBankChange(realChannel);
+			EnsureCCsForChannel(_state->channel.value, realChannel, (byte)_state->port.value);
 			UpdateNoteControls(n);
 
 			WritePan(n);
 			WriteVolume(n);
 			WritePitch(n, true);
 
+			byte writeVelocity = n->velocity;
+			if (_state->legacy)
+				writeVelocity = (byte)min((n->channelVolume) * 127, 127);
+			else if (_state->enableNoteVelocity.value)
+				writeVelocity = 127; //Velocity override uses midi channel volume to control note volume instead of velocity
+
 			if (_state->enableNoteTrigger.value)
-				MIDIOut((byte)(144 | (realChannel - 1)), (byte)n->startingNote, (byte)min((n->volume) * 127, 127), (byte)_state->port.value);
+				MIDIOut((byte)(144 | (realChannel - 1)), (byte)n->startingNote, (byte)writeVelocity, (byte)_state->port.value);
 
 			if (n->harmonic != 0 && _state->harmonizerEnabled.value)
-				MIDIOut((byte)(144 | (realChannel - 1)), (byte)n->harmonic, (byte)min((n->volume) * 127, 127), (byte)_state->port.value);
+				MIDIOut((byte)(144 | (realChannel - 1)), (byte)n->harmonic, (byte)writeVelocity, (byte)_state->port.value);
 			//---------------------------------------------------------------
 		}
 		else if (n->state == NoteState::Playing)
@@ -612,26 +695,11 @@ void _stdcall Plugin::Gen_Render(PWAV32FS DestBuffer, int& Length)
 			WritePitch(n);
 		}
 
-
-
-
 		if (n->state == NoteState::NoteOn)
 			n->state = NoteState::Playing;
-
-		//C_FinishUpdateNote(note);
-		if (n->state == NoteState::Finished)
-		{
-			for (int i = 0; i < 5; i++)
-			{
-				if (letters[i] == n->hostTag)
-					letters[i] = 0;
-			}
-
-			delete n;
-			_notes.erase(_notes.begin() + i);
-			i--;
-		}
 	}
+
+	_updatedThisFrame.clear();
 }
 
 void _stdcall Plugin::Idle_Public()
@@ -645,22 +713,73 @@ TVoiceHandle _stdcall Plugin::TriggerVoice(PVoiceParams VoiceParams, intptr_t Se
 	Note* n = new Note();
 	n->hostTag = SetTag;
 	n->state = NoteState::NoteOn;
-	n->channel = PlugHost->Voice_ProcessEvent(SetTag, FPV_GetColor, 0, 0);
+	n->channel = _state->channel.value + PlugHost->Voice_ProcessEvent(SetTag, FPV_GetColor, 0, 0);
 	n->params = VoiceParams;
+	n->startingNote = (byte)((VoiceParams->FinalLevels.Pitch / 100) + 60);
+
+	if (_state->legacy)
+	{
+		n->channelVolume = VoiceParams->FinalLevels.Vol;
+		PlugHost->Voice_ProcessEvent(SetTag, FPV_SetLinkVelocity, 1, 0);
+	}
+	else
+		PlugHost->Voice_ProcessEvent(SetTag, FPV_SetLinkVelocity, 0, 0);
+
+	//Retriggers
+	for (int i = 0; i < _notes.size(); i++)
+	{
+		if (_notes[i]->channel == n->channel && _notes[i]->startingNote == n->startingNote)
+		{
+			_notes[i]->state = NoteState::NoteOff;
+			_notes[i]->startingNote = -1;
+
+			if (_state->enableNoteTrigger.value)
+				MIDIOut((byte)(128 | (_notes[i]->channel - 1)), (byte)_notes[i]->startingNote, (byte)_notes[i]->velocity, (byte)_state->port.value);
+
+			if (_notes[i]->harmonic != 0 && _state->harmonizerEnabled.value)
+				MIDIOut((byte)(128 | (_notes[i]->channel - 1)), (byte)_notes[i]->harmonic, (byte)_notes[i]->velocity, (byte)_state->port.value);
+		}
+	}
 
 	_notes.push_back(n);
 
 	return (TVoiceHandle)n;
 }
-
-void _stdcall Plugin::Voice_Release(TVoiceHandle Handle)
+ 
+void _stdcall Plugin::Voice_Release(TVoiceHandle Handle) 
 {
 	((Note*)Handle)->state = NoteState::NoteOff;
 }
 
 void _stdcall Plugin::Voice_Kill(TVoiceHandle Handle)
 {
-	((Note*)Handle)->state = NoteState::Finished;
+	Note* note = ((Note*)Handle);
+	for (int i = 0; i < _notes.size(); i++)
+	{
+		if (_notes[i] == note)
+		{
+			note->state = NoteState::Finished;
+			for (int i = 0; i < 5; i++)
+			{
+				if (letters[i] == note->hostTag)
+					letters[i] = 0;
+			}
+
+			if (note->startingNote >= 0)
+			{
+				if (_state->enableNoteTrigger.value)
+					MIDIOut((byte)(128 | (note->channel - 1)), (byte)note->startingNote, (byte)note->velocity, (byte)_state->port.value);
+
+				if (note->harmonic != 0 && _state->harmonizerEnabled.value)
+					MIDIOut((byte)(128 | (note->channel - 1)), (byte)note->harmonic, (byte)note->velocity, (byte)_state->port.value);
+			}
+
+
+			delete note;
+			_notes.erase(_notes.begin() + i);
+			return;
+		}
+	}
 }
 
 Serializable* Plugin::getSerializable(std::wstring control)
@@ -726,28 +845,32 @@ void Plugin::MIDIOut(unsigned char status, unsigned char data1, unsigned char da
 	PlugHost->MIDIOut_Delayed(HostTag, *(int*)&msg);
 	//PlugHost->MIDIOut(HostTag, *(int*)&msg);
 }
-
+  
 void Plugin::UpdateNoteControls(Note* note)
 {
-
 	if (_updatedThisFrame.find(note->channel) == _updatedThisFrame.end())
 	{
 		_updatedThisFrame.emplace(note->channel);
 		for (int i = 0; i < 2; i++)
 		{
-			if (_state->assignedNoteControls[i].linkHash != -1)
+			if (_state->assignedNoteControls[i].linkHash != 0)
 			{
 				PlugParameter* param = getParameter(_state->assignedNoteControls[i].linkHash);
 				if (param == nullptr)
 					continue;
 
-				ProcessParam(param->hash, param->normalizedToRange(((i == 0 ? note->control1 : note->control2) + 1.0f) / 2.0f), (int)(AutomationTypeFlags::UpdateValue | AutomationTypeFlags::UpdateControl));
+				float prmwrite = ((i == 0 ? note->control1 : note->control2) + 1.0f) / 2.0f;
+				if (prmwrite != _state->assignedNoteControls[i].previousWrite)
+				{
+					ProcessParam(param->index, param->normalizedToMidiRange(prmwrite), (int)(AutomationTypeFlags::UpdateValue | AutomationTypeFlags::UpdateControl));
+					_state->assignedNoteControls[i].previousWrite = prmwrite;
+				}
 			}
 		}
 
 		for (int i = 0; i < 4; i++)
 		{
-			if (_state->assignedPartialNoteControls[i].linkHash != -1)
+			if (_state->assignedPartialNoteControls[i].linkHash != 0)
 			{
 				PlugParameter* param = getParameter(_state->assignedPartialNoteControls[i].linkHash);
 				if (param == nullptr)
@@ -761,7 +884,11 @@ void Plugin::UpdateNoteControls(Note* note)
 				else
 					controlVal = min(controlVal, 0.0f) * -1;
 
-				ProcessParam(param->hash, param->normalizedToRange(controlVal), (int)(AutomationTypeFlags::UpdateValue | AutomationTypeFlags::UpdateControl));
+				if (controlVal != _state->assignedPartialNoteControls[i].previousWrite)
+				{
+					ProcessParam(param->index, param->normalizedToMidiRange(controlVal), (int)(AutomationTypeFlags::UpdateValue | AutomationTypeFlags::UpdateControl));
+					_state->assignedPartialNoteControls[i].previousWrite = controlVal;
+				}
 			}
 		}
 	}
@@ -769,7 +896,59 @@ void Plugin::UpdateNoteControls(Note* note)
 
 void Plugin::AssignNoteControl(int control, NoteControlIndex ncIndex, NoteControlType type)
 {
+	PlugParameter* p = getParameterByIndex(control);
+	if (p != nullptr)
+	{
+		//Unassign all controls using this parameter first
+		for (int i = 0; i < 2; i++)
+		{
+			if (_state->assignedNoteControls[i].linkHash == p->hash)
+				_state->assignedNoteControls[i].linkHash = 0;
+		}		
+		for (int i = 0; i < 4; i++)
+		{
+			if (_state->assignedPartialNoteControls[i].linkHash == p->hash)
+				_state->assignedPartialNoteControls[i].linkHash = 0;
+		}
 
+		//Assign to parameter if necessary
+		if (ncIndex != NoteControlIndex::NoControl)
+		{
+			if (type == NoteControlType::Full)
+			{
+				_state->assignedNoteControls[(int)ncIndex].linkHash = p->hash;
+				_state->assignedPartialNoteControls[((int)ncIndex * 2)].linkHash = 0;
+				_state->assignedPartialNoteControls[((int)ncIndex * 2) + 1].linkHash = 0;
+			}
+			else
+			{
+				_state->assignedNoteControls[(int)ncIndex].linkHash = 0;
+				_state->assignedPartialNoteControls[((int)ncIndex * 2) + (int)(type - 1)].linkHash = p->hash;
+			}
+		}
+	}
+	else if(ncIndex != NoteControlIndex::NoControl)
+	{
+		_state->assignedNoteControls[(int)ncIndex].linkHash = 0;
+		if (type != NoteControlType::Full)
+			_state->assignedPartialNoteControls[((int)ncIndex * 2) + (int)(type - 1)].linkHash = p->hash;
+	}
+}
+
+bool Plugin::HasNoteControl(int hash)
+{
+	for (int i = 0; i < 2; i++)
+	{
+		if (_state->assignedNoteControls[i].linkHash == hash)
+			return true;
+	}
+	for (int i = 0; i < 4; i++)
+	{
+		if (_state->assignedPartialNoteControls[i].linkHash == hash)
+			return true;
+	}
+	
+	return false;
 }
 
 void Plugin::UpdateBankChange(int channel)
@@ -777,8 +956,8 @@ void Plugin::UpdateBankChange(int channel)
 	if (_state->midiPatch.value != 0)
 	{
 		int realValue = 0;
-		int outHash = _state->port.value + channel;
-		int valHash = _state->midiPatch.value + _state->midiBankCoarse.value + _state->midiBankFine.value;
+		int outHash = _state->port.value + ((channel + 4538) * 3029);
+		int valHash = _state->midiPatch.value + ((_state->midiBankCoarse.value + 49328) * 44281) + ((_state->midiBankFine.value + 1204) * 4021);
 
 		auto it = _midiPatchStatusCache.find(outHash);
 		if (it == _midiPatchStatusCache.end())
@@ -832,7 +1011,7 @@ void Plugin::WritePitch(Note* note, bool zeroPitch)
 		return;
 
 	byte portVal = (byte)_state->port.value;
-	byte chan = (byte)((_state->channel.value + note->channel) - 1);
+	byte chan = (byte)(note->channel - 1);
 
 	//MIDIOut((byte)(176 | chan), 101, 0, port);
 	//MIDIOut((byte)(176 | chan), 100, 0, port);
@@ -845,7 +1024,7 @@ void Plugin::WritePitch(Note* note, bool zeroPitch)
 		MIDIOut((byte)(224 | chan), 0, (byte)((int)middlePitch >> 7), (byte)portVal);
 	else
 	{
-		note->vibratoSin += note->startingNote - 120;
+		//note->vibratoSin += note->startingNote - 120;
 
 		int pitchDif = (int)note->pitch - ((note->startingNote - 60) * 100);
 	
@@ -870,11 +1049,11 @@ void Plugin::WritePan(Note* note)
 	if (!_state->enableNotePanning.value)
 		return;
 
-	byte pan = (byte)(((note->pan + 1.0f) / 2.0f) * 127);
+ 	byte pan = (byte)(((note->pan + 1.0f) / 2.0f) * 127);
 	if (pan != note->lastSetPan)
 	{
 		byte portVal = (byte)_state->port.value;
-		byte chan = (byte)((_state->channel.value + note->channel) - 1);
+		byte chan = (byte)note->channel - 1;
 
 		note->lastSetPan = pan;
 		MIDIOut((byte)(176 | chan), 10, pan, portVal);
@@ -883,14 +1062,29 @@ void Plugin::WritePan(Note* note)
 
 void Plugin::WriteVolume(Note* note)
 {
-	if (!_state->enableNoteVelocity.value)
-		return;
+	byte volume = note->channelVolume * 127;
+	if (_state->legacy)
+	{
+		if (!_state->enableNoteVelocity.value)
+			return;
 
-	byte volume = (byte)min((note->volume * 1.45f) * 127, 127);
+		volume = (byte)min((note->channelVolume * 1.45f) * 127, 127);
+	}
+	else
+	{
+		if (_state->enableNoteVelocity.value)
+			volume *= (note->velocity / 127.0f);
+		else
+		{
+			//Offset by changing note velocity to allow volume slides
+			volume = max(0, min(volume + (note->velocity - note->initialVelocity), 127));
+		}
+	}
+
 	if (volume != note->lastSetVolume)
 	{
 		byte portVal = (byte)_state->port.value;
-		byte chan = (byte)((_state->channel.value + note->channel) - 1);
+		byte chan = (byte)note->channel - 1;
 
 		note->lastSetVolume = volume;
 		MIDIOut((byte)(176 | chan), 7, volume, portVal);

@@ -37,6 +37,7 @@
 #endif
 
 #include "PluginGUI.h"
+#include "Plugin.h"
 #include "Parameter.h"
 
 #if ENABLE_VST_EXTENSION_IN_VSTGUI
@@ -2455,6 +2456,20 @@ bool CDrawContext::waitDrag ()
 }
 #endif
 
+
+PlugParameter* CBaseObject::getParameter() 
+{
+	if (_parameterHash != 0 && _plug != nullptr)
+		return _plug->getParameter(_parameterHash);
+
+	return nullptr;
+}
+
+void CBaseObject::setParameter(PlugParameter* param, Plugin* plug)
+{
+	_parameterHash = param != nullptr ? param->hash : 0; _plug = plug; 
+}
+
 //-----------------------------------------------------------------------------
 void CDrawContext::forget ()
 {
@@ -3188,9 +3203,10 @@ bool CView::removed (CView* parent)
  */
 CMouseEventResult CView::onMouseDown (CPoint &where, const long& buttons)
 {
-	if (_param != nullptr && buttons & kRButton)
+	PlugParameter* param = getParameter();
+	if (param != nullptr && buttons & kRButton)
 	{
-		((PluginGUI*)getEditor())->showDefaultControlMenu(_param, false);
+		((PluginGUI*)getEditor())->showDefaultControlMenu(getParameter(), false);
 		return kMouseEventHandled;
 	}
 
@@ -3237,7 +3253,8 @@ CMouseEventResult CView::onMouseExited(CPoint& where, const long& buttons)
 void CView::updateTooltip(bool show)
 {
 	PluginGUI* editor = (PluginGUI*)getEditor();
-	if (editor == nullptr || _param == nullptr)
+	PlugParameter* param = getParameter();
+	if (editor == nullptr || param == nullptr)
 		return;
 
 	if (!show)
@@ -3247,7 +3264,7 @@ void CView::updateTooltip(bool show)
 	}
 	else
 	{
-		editor->showTooltip(_param->name + L": " + _param->toString());
+		editor->showTooltip(param->name + L": " + param->toString());
 		_showingTooltip = true;
 	}
 }

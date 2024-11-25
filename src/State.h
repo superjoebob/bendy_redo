@@ -12,6 +12,7 @@ struct State : Serializable
 
 	int versionMajor;
 	int versionMinor;
+	bool legacy;
 
 	ParameterInt currentPresetIndex;
 	ParameterLinkList assignedNoteControls;

@@ -25,13 +25,23 @@ PluginGUI::PluginGUI(void* ptr)
 	_graph = nullptr;
 }
 
-void PluginGUI::rebuild(void* ptr)
-{
-	if (frame != nullptr)
-		ptr = frame->getSystemWindow();
+//void PluginGUI::rebuild(void* ptr)
+//{
+//	if (frame != nullptr)
+//		ptr = frame->getSystemWindow();
+//
+//	close();
+//	open(ptr);
+//}
 
-	close();
-	open(ptr);
+void PluginGUI::reconnect()
+{
+	for (auto it = _paramsMap.begin(); it != _paramsMap.end(); it++)
+	{
+		it->second->setParameter(_plugin->getParameter(it->first), _plugin);
+	}
+	_graph->reconnect();
+	setExpanded(_plugin->getParameter(L"expanded")->getFloat() > 0.5f);
 }
 
 template <typename T>
@@ -40,13 +50,18 @@ T* PluginGUI::addControl(CView* control, std::wstring param, bool setMouseEnable
 	if (param != L"")
 	{
 		PlugParameter* parameter = _plugin->getParameter(param);
-		control->setParameter(parameter);
+		if (parameter != nullptr)
+		{
+			control->setParameter(parameter, _plugin);
 
-		if (dynamic_cast<CControl*>(control) != nullptr)
-			_hashMap[parameter->hash] = dynamic_cast<CControl*>(control);
+			if (dynamic_cast<CControl*>(control) != nullptr)
+				_hashMap[parameter->hash] = dynamic_cast<CControl*>(control);
 
-		if (_currentEnableButton != nullptr)
-			_enableSection[parameter->hash] = _currentEnableButton;
+			_paramsMap[parameter->hash] = control;
+
+			if (_currentEnableButton != nullptr)
+				_enableSection[parameter->hash] = _currentEnableButton;
+		}
 	}
 
 	frame->addView(control);
@@ -151,19 +166,19 @@ bool PluginGUI::open(void* ptr)
 	//----------------------------------------------------
 	_currentEnableButton = addControl<COnOffButton>(new COnOffButton(CRect(sPoint(2, 79), sPoint(5, 5)), this, 0, tinyCheckbox, 0), L"asdrCCEnable");
 
-	CBitmapText* asdrText = addControl<CBitmapText>(new CBitmapText(CRect(sPoint(8, 81), sPoint(38, 6)), CPoint(12, 12), font, L"Enter ASDR Name"), L"asdrCCName");
+	CBitmapText* asdrText = addControl<CBitmapText>(new CBitmapText(this, CRect(sPoint(8, 81), sPoint(38, 6)), CPoint(12, 12), font, L"Enter ASDR Name"), L"asdrCCName");
 	asdrText->setText(L"ASDR CC");
 
-	asdrText = addControl<CBitmapText>(new CBitmapText(CRect(sPoint(51, 81), sPoint(5, 6)), CPoint(12, 12), font, L"Enter MIDI CC"), L"asdrCC0");
+	asdrText = addControl<CBitmapText>(new CBitmapText(this, CRect(sPoint(51, 81), sPoint(5, 6)), CPoint(12, 12), font, L"Enter MIDI CC"), L"asdrCC0");
 	asdrText->setText(L"A", true);
 
-	asdrText = addControl<CBitmapText>(new CBitmapText(CRect(sPoint(63, 81), sPoint(5, 6)), CPoint(12, 12), font, L"Enter MIDI CC"), L"asdrCC1");
+	asdrText = addControl<CBitmapText>(new CBitmapText(this, CRect(sPoint(63, 81), sPoint(5, 6)), CPoint(12, 12), font, L"Enter MIDI CC"), L"asdrCC1");
 	asdrText->setText(L"S", true);
 	
-	asdrText = addControl<CBitmapText>(new CBitmapText(CRect(sPoint(75, 81), sPoint(5, 6)), CPoint(12, 12), font, L"Enter MIDI CC"), L"asdrCC2");
+	asdrText = addControl<CBitmapText>(new CBitmapText(this, CRect(sPoint(75, 81), sPoint(5, 6)), CPoint(12, 12), font, L"Enter MIDI CC"), L"asdrCC2");
 	asdrText->setText(L"D", true);
 
-	asdrText = addControl<CBitmapText>(new CBitmapText(CRect(sPoint(87, 81), sPoint(5, 6)), CPoint(12, 12), font, L"Enter MIDI CC"), L"asdrCC3");
+	asdrText = addControl<CBitmapText>(new CBitmapText(this, CRect(sPoint(87, 81), sPoint(5, 6)), CPoint(12, 12), font, L"Enter MIDI CC"), L"asdrCC3");
 	asdrText->setText(L"R", true);
 
 	_graphUpdaters.emplace(addControl<CAnimKnob>(new CAnimKnob(CRect(sPoint(48, 87), sPoint(11, 11)), this, _plugin->getCID(L"asdrCCValue0"), 24, 11 * sScaleFactor, knobHandle), L"asdrCCValue0", true));
@@ -188,8 +203,10 @@ bool PluginGUI::open(void* ptr)
 		std::wstring indexString = std::to_wstring(i);
 		_currentEnableButton = addControl<COnOffButton>(new COnOffButton(CRect(knobOffset + sPoint(-13, -10), sPoint(5, 5)), this, _plugin->getCID(L"midiKnobEnabled"), tinyCheckbox, 0), L"midiKnobEnabled" + indexString);
 		addControl<CAnimKnob>(new CAnimKnob(CRect(knobOffset, sPoint(11, 11)), this, 0, 24, 11 * sScaleFactor, knobHandle), L"midiKnobValue" + indexString, true);
-		addControl<CBitmapText>(new CBitmapText(CRect(knobOffset + sPoint(-7, -6), sPoint(25, 4)), CPoint(12, 12), font, L"Enter MIDI CC Number", L"CC-"), L"midiKnobCC" + indexString);
-		addControl<CBitmapText>(new CBitmapText(CRect(knobOffset + sPoint(-12, 13), sPoint(34, 4)), CPoint(12, 12), font, L"Enter Name"), L"midiKnobName" + indexString);
+		CBitmapText* ccButton  = addControl<CBitmapText>(new CBitmapText(this, CRect(knobOffset + sPoint(-7, -6), sPoint(25, 4)), CPoint(12, 12), font, L"Enter MIDI CC Number", L"CC-"), L"midiKnobCC" + indexString);
+		ccButton->isCCButton = true;
+
+		addControl<CBitmapText>(new CBitmapText(this, CRect(knobOffset + sPoint(-12, 13), sPoint(34, 4)), CPoint(12, 12), font, L"Enter Name"), L"midiKnobName" + indexString);
 		_currentEnableButton = nullptr;
 
 		knobOffset.x += sCoord(36);
@@ -202,28 +219,7 @@ bool PluginGUI::open(void* ptr)
 	//----------------------------------------------------
 
 
-	_graph = new CGraph(CRect(sPoint(6, 88), sPoint(39, 9)));
-
-	GraphPart g = GraphPart();
-	g.widthParam = _plugin->getParameter(L"asdrCCValue0");
-	g.fixedHeight = 1;
-	_graph->parts.push_back(g);
-
-	g = GraphPart();
-	g.widthParam = _plugin->getParameter(L"asdrCCValue2");
-	g.heightParam = _plugin->getParameter(L"asdrCCValue1");
-	_graph->parts.push_back(g);
-
-	g = GraphPart();
-	g.heightParam = _plugin->getParameter(L"asdrCCValue1");
-	g.fixedWidth = 1;
-	_graph->parts.push_back(g);
-	
-	g = GraphPart();
-	g.widthParam = _plugin->getParameter(L"asdrCCValue3");
-	g.fixedHeight = 0;
-	_graph->parts.push_back(g);
-
+	_graph = new CGraph(CRect(sPoint(6, 88), sPoint(39, 9)), _plugin);
 	addControl<CGraph>(_graph);
 
 
@@ -301,6 +297,20 @@ void PluginGUI::idle()
 			_letters[i]->invalid();
 		}
 	}
+
+	for(auto it = _hashMap.begin(); it != _hashMap.end(); it++)
+	{ 
+		CControl* c = (*it).second;
+		if (c->needsUpdate)
+		{
+			c->setParameter(c->getParameter(), _plugin);
+			auto graphUpdater = _graphUpdaters.find(c);
+			if (graphUpdater != _graphUpdaters.end())
+				_graph->invalid();
+
+			c->needsUpdate = false;
+		}
+	}
 }
 
 
@@ -341,16 +351,16 @@ void PluginGUI::valueChanged(CControl* pControl)
 			_graph->invalid();
 
 		//Enable uninitialized sections when their knobs move for the first time
-		if (uninitialized)
-		{
-			auto controlEnable = _enableSection.find(pControl->getTag());
-			if (controlEnable != _enableSection.end() && (*controlEnable).second->getValue() < 0.5f)
-			{
-				float val = 1.0f;
-				if ((*controlEnable).second->getParameter() != nullptr)
-					_plugin->ProcessParam((*controlEnable).second->getParameter()->index, FromMIDI_Max, REC_UpdateValue | REC_UpdateControl | REC_FromMIDI);
-			}
-		}
+		//if (uninitialized)
+		//{
+		//	auto controlEnable = _enableSection.find(pControl->getTag());
+		//	if (controlEnable != _enableSection.end() && (*controlEnable).second->getValue() < 0.5f)
+		//	{
+		//		float val = 1.0f;
+		//		if ((*controlEnable).second->getParameter() != nullptr)
+		//			_plugin->ProcessParam((*controlEnable).second->getParameter()->index, FromMIDI_Max, REC_UpdateValue | REC_UpdateControl | REC_FromMIDI);
+		//	}
+		//}
 	}
 }
 
@@ -427,12 +437,7 @@ void PluginGUI::setParameter(int index, float value)
 {
 	auto it = _hashMap.find(index);
 	if (it != _hashMap.end())
-	{
-		(*it).second->setParameter(_plugin->getParameter(index));
-		auto graphUpdater = _graphUpdaters.find((*it).second);
-		if (graphUpdater != _graphUpdaters.end())
-			_graph->invalid();
-	}
+		(*it).second->needsUpdate = true;
 }
 
 
@@ -500,7 +505,7 @@ void PluginGUI::showDefaultControlMenu(PlugParameter* param, bool noteControlAss
 			AppendMenu(ContextMenu, MF_STRING, 2, L"Set Range Max");
 
 
-			if (noteControlAssigned)
+			if (_plugin->HasNoteControl(param->hash))
 				AppendMenu(ContextMenu, MF_STRING, 3, L"Unassign Note Control");
 			else
 			{
@@ -548,3 +553,60 @@ void PluginGUI::showDefaultControlMenu(PlugParameter* param, bool noteControlAss
 		ContextMenu = 0;
 	}
 }
+
+
+struct MidiCCDefault
+{
+	MidiCCDefault(std::wstring t, int ccval)
+	{
+		text = t;
+		cc = ccval;
+	}
+	std::wstring text;
+	int cc;
+};
+
+int numCCDefaults = 13;
+MidiCCDefault* kCCDefaults = new MidiCCDefault[]
+{
+	MidiCCDefault(L"Reverb (91)", 91),
+	MidiCCDefault(L"Tremolo (92)", 92),
+	MidiCCDefault(L"Chorus (93)", 93),
+	MidiCCDefault(L"Detune (94)", 94),
+	MidiCCDefault(L"Phaser (95)", 95),
+	MidiCCDefault(L"Portamento Toggle (65)", 65),
+	MidiCCDefault(L"Portamento Amount (84)", 84),
+	MidiCCDefault(L"Sound Variance (70)", 70),
+	MidiCCDefault(L"Envelope Release (72)", 72),
+	MidiCCDefault(L"Envelope Attack (73)", 73),
+	MidiCCDefault(L"Filter Cutoff (74)", 74),
+	MidiCCDefault(L"Filter Reso (71)", 71),
+	MidiCCDefault(L"Expression Pedal (11)", 11),
+};
+
+
+int PluginGUI::showDefaultCCMenu()
+{
+	if (frame != nullptr)
+	{
+		CPoint mousePos = getPopupLocation();
+		ContextMenu = CreatePopupMenu();
+		NoteControl1SubMenu = 0;
+		NoteControl2SubMenu = 0;
+
+		for (int i = 0; i < numCCDefaults; i++)
+		{
+			AppendMenu(ContextMenu, MF_STRING, i + 1, kCCDefaults[i].text.c_str());
+		}
+
+		BOOL r = TrackPopupMenu(ContextMenu, TPM_RETURNCMD | TPM_RIGHTBUTTON, mousePos.x, mousePos.y, 0, (HWND)frame->getSystemWindow(), NULL);
+		int ret = -1;
+		if (r > 0)
+			ret = kCCDefaults[r - 1].cc;
+
+		DestroyMenu(ContextMenu);
+		ContextMenu = 0;
+		return ret;
+	}
+}
+

@@ -2,10 +2,12 @@
 #include "StreamWrapper.h"
 #include "Preset.h"
 
+int kVersionMajor = 2;
+int kVersionMinor = 0;
 State::State():
     Serializable(L"State", L"state"),
-	versionMajor(0),
-	versionMinor(0),
+	versionMajor(kVersionMajor),
+	versionMinor(kVersionMinor),
     currentPresetIndex(L"Current Preset Index", L"currentPresetIndex", 0, 0, INT32_MAX),
     assignedNoteControls(L"Note Control Parameter Index", L"assignedNoteControls", 2),
     assignedPartialNoteControls(L"Note Control Upper Parameter Index", L"assignedPartialNoteControls", 4),
@@ -193,8 +195,12 @@ State::State():
 State::~State() { cleanup(); }
 void State::serialize(Stream* s)
 {
+    //Bring versions up to date since we're writing the latest format
+    versionMajor = kVersionMajor;
+    versionMinor = kVersionMinor;
 	s->writeInt(versionMajor);
 	s->writeInt(versionMinor);
+    s->writeBool(legacy);
 	Serializable::serialize(s);
 }
 
@@ -203,6 +209,11 @@ void State::deserialize(Stream* s)
     cleanup(); //get rid of existing data
     versionMajor = s->readInt();
     versionMinor = s->readInt();
+
+    if (versionMajor >= 2)
+        legacy = s->readBool();
+    else
+        legacy = false;
 
     Serializable::deserialize(s);
 }
@@ -246,6 +257,8 @@ void State::legacy_deserialize(Stream* s)
         if (legit != _legacyIndexMap.end())
             assignedPartialNoteControls[i].linkHash = (*legit).second->hash;
     }
+
+    legacy = true;
 }
 
 void State::cleanup()

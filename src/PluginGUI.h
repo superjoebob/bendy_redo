@@ -5,6 +5,9 @@
 #include <map>
 #include <vector>
 #include <unordered_set>
+
+
+
 class Plugin;
 class CGraph;
 class PluginGUI : public PluginGUIEditor, public CControlListener
@@ -12,7 +15,7 @@ class PluginGUI : public PluginGUIEditor, public CControlListener
 public:
 	PluginGUI(void*);
 
-	void rebuild(void* ptr = nullptr);
+	//void rebuild(void* ptr = nullptr);
 	bool open(void* ptr);
 	void close(); 
 	virtual void idle();
@@ -31,9 +34,10 @@ public:
 	void showTooltip(std::wstring text);
 	std::wstring getInput(std::wstring caption, std::wstring defaultText);
 	void showDefaultControlMenu(PlugParameter* param, bool noteControlAssigned);
+	int showDefaultCCMenu();
 
+	void reconnect();
 	Plugin* getPlugin() { return _plugin; }
-
 private:
 	Plugin* _plugin;
 
@@ -42,6 +46,8 @@ private:
 	std::map<int, CControl*> _hashMap;
 	std::map<int, CControl*> _enableSection;
 	std::vector<CMovieBitmap*> _letters;
+
+	std::map<int, CBaseObject*> _paramsMap;
 
 	CGraph* _graph;
 	std::unordered_set<CControl*> _graphUpdaters;

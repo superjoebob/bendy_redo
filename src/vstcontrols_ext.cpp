@@ -101,11 +101,14 @@ char* _characters = new char[]
 
 std::mutex _charmapMutex;
 int* _characterMap = nullptr;
-CBitmapText::CBitmapText(const CRect& size, const CPoint& letterSize, CBitmap* font, std::wstring inputCaption, std::wstring prefix, std::wstring suffix)
+CBitmapText::CBitmapText(PluginGUI* plugin, const CRect& size, const CPoint& letterSize, CBitmap* font, std::wstring inputCaption, std::wstring prefix, std::wstring suffix)
 	: CView(size),
 	_numDigits(2),
 	_align(CHoriTxtAlign::kCenterText),
-	_lockText(false)
+	_lockText(false),
+	ContextMenu(0),
+	_plugin(plugin),
+	isCCButton(false)
 {
 	_letterSize = letterSize;
 	_image = font;
@@ -145,21 +148,44 @@ CMouseEventResult CBitmapText::onMouseDown(CPoint& where, const long& buttons)
 {
 	if (_inputCaption != L"" && getParameter() != nullptr)
 	{
-		std::wstring result = ((PluginGUI*)getEditor())->getInput(_inputCaption, getParameter()->toString());
-		getParameter()->setFromString(result);
+		if ((buttons & kRButton) != 0)
+		{
+			if (isCCButton && _plugin != nullptr)
+			{
+				int cc = _plugin->showDefaultCCMenu();
+				if (cc >= 0)
+				{
+					PlugParameter* param = getParameter();
+					param->set4ByteValue(&cc);
+					if (param->refreshCluster && param->midi.enabled != nullptr)
+					{
+						param->refreshCluster = false;
+						_plugin->setParameter(param->midi.enabled->hash, 1);
+					}
 
-		if (_lockText == false)
-			setText(getParameter()->toString());
+					if (_lockText == false)
+						setText(getParameter()->toString());
+				}
+			}
+		}
+		else
+		{
+			std::wstring result = ((PluginGUI*)getEditor())->getInput(_inputCaption, getParameter()->toString());
+			getParameter()->setFromString(result);
+
+			if (_lockText == false)
+				setText(getParameter()->toString());
+		}
 	}
 	return CMouseEventResult::kMouseEventHandled;
 }
 
-void CBitmapText::setParameter(PlugParameter* param)
+void CBitmapText::setParameter(PlugParameter* param, Plugin* plug)
 {
 	if(param != nullptr && _lockText == false)
 		setText(param->toString());
 
-	CBaseObject::setParameter(param);
+	CBaseObject::setParameter(param, plug);
 }
 
 void CBitmapText::draw(CDrawContext* pContext)
@@ -183,9 +209,15 @@ void CBitmapText::draw(CDrawContext* pContext)
 
 				CPoint charOffset = CPoint((charIndex % charsWide) * _letterSize.x, (charIndex / charsWide) * _letterSize.y);
 				if (bTransparencyEnabled)
-					_image->drawTransparent(pContext, CRect(where, _letterSize), charOffset);
+				{
+					CRect r = CRect(where, _letterSize);
+					_image->drawTransparent(pContext, r, charOffset);
+				}
 				else
-					_image->draw(pContext, CRect(where, _letterSize), charOffset);
+				{
+					CRect r = CRect(where, _letterSize);
+					_image->draw(pContext, r, charOffset);
+				}
 
 				where.x += _letterSize.x;
 			}
@@ -213,9 +245,9 @@ CSpinner::CSpinner(const CRect& size, CFrame* frame, CControlListener* listener,
 		CBitmap* font = new CBitmap(PNG_biosFontCaseSensitive_halfres);
 
 		if(showButtons)
-			_text = new CBitmapText(CRect(CPoint(size.getTopLeft().x + 8, size.getTopLeft().y + ((size.getHeight() / 2) - 4)), CPoint(size.getWidth() - widthSub, size.getHeight())), CPoint(12, 12), font);
+			_text = new CBitmapText(nullptr, CRect(CPoint(size.getTopLeft().x + 8, size.getTopLeft().y + ((size.getHeight() / 2) - 4)), CPoint(size.getWidth() - widthSub, size.getHeight())), CPoint(12, 12), font);
 		else
-			_text = new CBitmapText(CRect(CPoint(size.getTopLeft().x + sCoord(1), size.getTopLeft().y + ((size.getHeight() / 2) - 4)), CPoint(size.getWidth() - sCoord(2), size.getHeight())), CPoint(12, 12), font);
+			_text = new CBitmapText(nullptr, CRect(CPoint(size.getTopLeft().x + sCoord(1), size.getTopLeft().y + ((size.getHeight() / 2) - 4)), CPoint(size.getWidth() - sCoord(2), size.getHeight())), CPoint(12, 12), font);
 
 		_text->setAlign(align);
 
@@ -293,9 +325,9 @@ void CSpinner::setValue(float value)
 	invalid();
 }
 
-void CSpinner::setParameter(PlugParameter* param)
+void CSpinner::setParameter(PlugParameter* param, Plugin* plug)
 {
-	CControl::setParameter(param);
+	CControl::setParameter(param, plug);
 	if (param != nullptr)
 		setValue(value);
 }
@@ -346,15 +378,18 @@ CMouseEventResult CSpinner::onMouseDown(CPoint& where, const long& buttons)
 
 			for (int i = 0; i < sel->strings.size(); i++)
 			{
-				((PluginGUI*)getEditor())->popupMenuAdd(menu, sel->toReadable(i, false), i, i % 32 == 0);
+				((PluginGUI*)getEditor())->popupMenuAdd(menu, sel->toReadable(i, false), i + 1, i % 32 == 0);
 			}
 
 			int selection = ((PluginGUI*)getEditor())->endPopupMenu(menu);
-			value = selection;
-			beginEdit();
-			valueChanged(this);
-			endEdit();
-			setValue(value);
+			if (selection != 0)
+			{
+				value = selection - 1;
+				beginEdit();
+				valueChanged(this);
+				endEdit();
+				setValue(value);
+			}
 		}
 	}
 
@@ -362,34 +397,77 @@ CMouseEventResult CSpinner::onMouseDown(CPoint& where, const long& buttons)
 }
 
 
-float GraphPart::getWidthValue()
+float GraphPart::getWidthValue(Plugin* plug)
 {
-	if (widthParam != nullptr)
-		return widthParam->getNormalized();
+	if (widthParam != 0)
+	{
+		PlugParameter* p = plug->getParameter(widthParam);
+		if(p != nullptr)
+			return p->getNormalized();
+	}
 
 	return fixedWidth;
 }
-float GraphPart::getHeightValue()
+float GraphPart::getHeightValue(Plugin* plug)
 {
-	if (heightParam != nullptr)
-		return heightParam->getNormalized();
+	if (heightParam != 0)
+	{
+		PlugParameter* p = plug->getParameter(heightParam);
+		if (p != nullptr)
+		return p->getNormalized();
+	}
 
 	return fixedHeight;
 }
 
-CGraph::CGraph(const CRect& size)
-	: CView(size)
+CGraph::CGraph(const CRect& size, Plugin* plugin)
+	: CView(size),
+	_plugin(plugin)
 {
-	
+	reconnect();
+}
+
+void CGraph::reconnect()
+{
+	parts.clear();	
+	GraphPart g = GraphPart();
+	PlugParameter* p = _plugin->getParameter(L"asdrCCValue0");
+	if (p != nullptr)
+		g.widthParam = p->hash;
+	g.fixedHeight = 1;
+	parts.push_back(g);
+
+	g = GraphPart();
+	p = _plugin->getParameter(L"asdrCCValue2");
+	if (p != nullptr)
+		g.widthParam = p->hash;
+	p = _plugin->getParameter(L"asdrCCValue1");
+	if (p != nullptr)
+		g.heightParam = p->hash;
+	parts.push_back(g);
+
+	g = GraphPart();
+	p = _plugin->getParameter(L"asdrCCValue1");
+	if (p != nullptr)
+		g.heightParam = p->hash;
+	g.fixedWidth = 1;
+	parts.push_back(g);
+
+	g = GraphPart();
+	p = _plugin->getParameter(L"asdrCCValue3");
+	if (p != nullptr)
+		g.widthParam = p->hash;
+	g.fixedHeight = 0;
+	parts.push_back(g);
 }
 
 
-void CGraph::setParameter(PlugParameter* param)
+void CGraph::setParameter(PlugParameter* param, Plugin* plug)
 {
 	//if (param != nullptr && _lockText == false)
 	//	setText(param->toString());
 
-	CBaseObject::setParameter(param);
+	CBaseObject::setParameter(param, plug);
 }
 
 void CGraph::draw(CDrawContext* context)
@@ -397,7 +475,7 @@ void CGraph::draw(CDrawContext* context)
 	float totalWidthTaken = 0.0f;
 	for(int i = 0; i < parts.size(); i++)
 	{
-		totalWidthTaken += parts[i].getWidthValue();
+		totalWidthTaken += parts[i].getWidthValue(_plugin);
 	}
 
 	context->setFrameColor(MakeCColor(255, 255, 255, 255));
@@ -412,7 +490,7 @@ void CGraph::draw(CDrawContext* context)
 	for (int i = 0; i < parts.size(); i++)
 	{
 		GraphPart& p = parts[i];
-		CPoint nextPoint = CPoint(prevPoint.x + (p.getWidthValue() * widthMul), 1.0f - p.getHeightValue());
+		CPoint nextPoint = CPoint(prevPoint.x + (p.getWidthValue(_plugin) * widthMul), 1.0f - p.getHeightValue(_plugin));
 
 
 		CPoint p1 = position + CPoint(prevPoint.x * size.x, prevPoint.y * size.y);

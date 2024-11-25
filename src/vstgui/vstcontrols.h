@@ -131,6 +131,8 @@ BEGIN_NAMESPACE_VSTGUI
 class CControl : public CView
 {
 public:
+	bool needsUpdate;
+
 	//-----------------------------------------------------------------------------
 	/// \name Constructor
 	//-----------------------------------------------------------------------------
@@ -170,7 +172,7 @@ public:
 	//@{
 	virtual void  setTag (long val) { tag = val; }
 	virtual long  getTag () const { return tag; }
-	virtual void setParameter(PlugParameter* param) override;
+	virtual void setParameter(PlugParameter* param, Plugin* plug) override;
 
 	virtual void beginEdit ();
 	virtual void endEdit ();
@@ -192,7 +194,7 @@ public:
 	VSTGUI_DEPRECATED(bool isDoubleClick ();) ///< \deprecated use kDoubleClick in onMouseDown
 
 	CLASS_METHODS_VIRTUAL(CControl, CView)
-
+		
 protected:
 	CControlListener* listener;
 	long  tag;

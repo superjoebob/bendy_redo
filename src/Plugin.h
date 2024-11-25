@@ -35,7 +35,9 @@ struct Note
 	int channel = 0;
 	PVoiceParams params = nullptr;
 
-	float volume = 0.0f;
+	int velocity = 0;
+	int initialVelocity = 0;
+	float channelVolume = 0.0f;
 	float pan = 0.0f;
 	float pitch = 0.0f;
 	float control1 = 0.0f;
@@ -80,9 +82,12 @@ public:
 
 	virtual intptr_t _stdcall Dispatcher(intptr_t ID, intptr_t Index, intptr_t Value);
 	virtual int _stdcall ProcessParam(int Index, int Value, int RECFlags);
+	virtual int _stdcall ProcessEvent(int EventID, int EventValue, int Flags);
 	virtual void _stdcall GetName(int Section, int Index, int Value, char* Name);
 
 	virtual void _stdcall Gen_Render(PWAV32FS DestBuffer, int& Length);
+	virtual void _stdcall NewTick();
+
 	void _stdcall Idle_Public();
 
 	virtual TVoiceHandle _stdcall TriggerVoice(PVoiceParams VoiceParams, intptr_t SetTag);
@@ -99,6 +104,9 @@ public:
 	void MIDIOut(unsigned char status, unsigned char data1, unsigned char data2, unsigned char port);
 	void UpdateNoteControls(Note* note);
 	void AssignNoteControl(int control, NoteControlIndex ncIndex, NoteControlType type);
+	bool HasNoteControl(int hash);
+
+	void MakeChannelDirty(int channel);
 	void UpdateBankChange(int channel);
 	void EnsureCCsForChannel(int mainChannel, int subChannel, byte port);
 
@@ -118,6 +126,8 @@ protected:
 	std::map<int, std::map<byte, byte>> _ccHistory;
 	std::vector<Scale> _scales;
 	std::unordered_set<int> _updatedThisFrame;
+
+	int _masterPitchCents;
 
 	byte CalculateHarmonic(byte note);
 };

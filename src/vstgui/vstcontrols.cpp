@@ -108,6 +108,7 @@ CControl::CControl (const CRect& size, CControlListener* listener, long tag, CBi
 , vmax (1.f)
 , wheelInc (0.1f)
 , lastTicks (-1)
+, needsUpdate(false)
 {
 	#if WINDOWS
 		delta = GetDoubleClickTime ();
@@ -139,6 +140,7 @@ CControl::CControl (const CControl& c)
 , vmax (c.vmax)
 , wheelInc (c.wheelInc)
 , lastTicks (c.lastTicks)
+, needsUpdate(false)
 {
 }
 
@@ -156,7 +158,7 @@ void CControl::setValue(float val)
 		updateTooltip(true);
 }
 
-void CControl::setParameter(PlugParameter* param)
+void CControl::setParameter(PlugParameter* param, Plugin* plug)
 {
 	if (param == nullptr)
 		return;
@@ -169,13 +171,13 @@ void CControl::setParameter(PlugParameter* param)
 	if (val > getMax())
 		val = getMax();
 	if (val < getMin())
-		val = getMin();
+ 		val = getMin();
 
 	setValue(val);
 	setWheelInc(param->getInc());
 
 	invalid();
-	CBaseObject::setParameter(param);
+	CBaseObject::setParameter(param, plug);
 }
 
 //------------------------------------------------------------------------
@@ -313,7 +315,8 @@ When its value changes, the listener is called.
 COnOffButton::COnOffButton (const CRect& size, CControlListener* listener, long tag, CBitmap* background, long style)
 : CControl (size, listener, tag, background)
 , style (style)
-{}
+{
+}
 
 //------------------------------------------------------------------------
 COnOffButton::COnOffButton (const COnOffButton& v)
@@ -328,12 +331,15 @@ COnOffButton::~COnOffButton ()
 //------------------------------------------------------------------------
 void COnOffButton::draw (CDrawContext *pContext)
 {
-	CCoord off;
+	CCoord off = 0;;
 
-	if (value && pBackground)
-		off = pBackground->getHeight () / 2;
-	else
-		off = 0;
+	if (pBackground)
+	{
+		if (value > 0)
+			off = pBackground->getHeight() / 3;
+		else if(value < 0)
+			off = (pBackground->getHeight() / 3) * 2;
+	}
 
 	if (pBackground)
 	{

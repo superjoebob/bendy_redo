@@ -3,20 +3,30 @@
 
 bool MidiCluster::shouldTrigger()
 {
-	return (enabled == nullptr || enabled->value) && cc != nullptr && value != nullptr;
+	return (enabled == nullptr || enabled->value > 0) && cc != nullptr && value != nullptr;
 }
 
 PlugParameter::PlugParameter(std::wstring name, std::wstring id):
 	Serializable(name, id),
 	canSetRange(false),
-	midiTrigger(MidiTrigger::None)
+	midiTrigger(MidiTrigger::None),
+	refreshCluster(false)
 {
 
 }
 
+std::wstring PlugParameter::getName()
+{
+	if (midi.name != nullptr && midi.name->value != L"")
+		return midi.name->value;
+	return name;
+}
+
+
 ParameterLink::ParameterLink(std::wstring name, std::wstring id) :
 	PlugParameter(name, id),
-	linkHash(0)
+	linkHash(0),
+	previousWrite(FLT_MIN)
 {
 }
 
@@ -219,6 +229,16 @@ void ParameterInt::legacy_deserialize(Stream* s)
 	Serializable::legacy_deserialize(s);
 }
 
+void ParameterInt::setValue(int v)
+{
+	if (v != value && midi.enabled != nullptr && midi.enabled->value == -1)
+	{
+		midi.enabled->setFloat(1);
+		refreshCluster = true;
+	}
+
+	value = v;
+}
 
 template<typename T> ParameterList<T>::ParameterList(std::wstring name, std::wstring id)
 	:PlugParameter(name, id)
@@ -294,7 +314,7 @@ ParameterStringList::ParameterStringList(std::wstring name, std::wstring id, int
 	initialize_map();
 }
 
-ParameterBool::ParameterBool(std::wstring name, std::wstring id, bool value) :
+ParameterBool::ParameterBool(std::wstring name, std::wstring id, int value) :
 	PlugParameter(name, id)
 {
 	this->value = value;
@@ -302,13 +322,13 @@ ParameterBool::ParameterBool(std::wstring name, std::wstring id, bool value) :
 
 void ParameterBool::serialize(Stream* s)
 {
-	s->writeBool(value);
+	s->writeChar((char)value);
 	Serializable::serialize(s);
 }
 
 void ParameterBool::deserialize(Stream* s)
 {
-	value = s->readBool();
+	value = s->readChar();
 	Serializable::deserialize(s);
 }
 
@@ -318,7 +338,7 @@ void ParameterBool::legacy_deserialize(Stream* s)
 	Serializable::legacy_deserialize(s);
 }
 
-ParameterBoolList::ParameterBoolList(std::wstring name, std::wstring id, int num, bool value) :
+ParameterBoolList::ParameterBoolList(std::wstring name, std::wstring id, int num, int value) :
 	ParameterList<ParameterBool>(name, id)
 {
 	for (int i = 0; i < num; i++)

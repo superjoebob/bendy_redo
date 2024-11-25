@@ -248,7 +248,7 @@ void TCPPFruityPlug::ShowHintMsg_Percent(int Value, int Max)
 
 void TCPPFruityPlug::ShowHintMsg_Pitch(int Value, int PitchType)
 {
-    char *PitchTypeT[4];
+    const char *PitchTypeT[4];
     PitchTypeT[0] = "octave";
     PitchTypeT[1] = "semitone";
     PitchTypeT[2] = "cent";
@@ -273,7 +273,7 @@ void TCPPFruityPlug::ShowHintMsg_Pitch(int Value, int PitchType)
 
 void TCPPFruityPlug::ShowHintMsg_Pitch(float Value, int PitchType, int Digits)
 {
-    char *PitchTypeT[4];
+    const char *PitchTypeT[4];
     PitchTypeT[0] = "octave";
     PitchTypeT[1] = "semitone";
     PitchTypeT[2] = "cent";
