@@ -30,14 +30,16 @@ class PluginGUI;
 class CBitmapNumber : public CViewContainer
 {
 public:
-	CBitmapNumber(const CRect& firstLetterSize, CFrame* frame, CBitmap* numberImage, int digits);
+	CBitmapNumber(const CRect& firstLetterSize, CFrame* frame, CBitmap* numberImage, int digits, bool vertical = false);
 	virtual ~CBitmapNumber();
 
-	void setNumber(int number);
+	void setNumber(int number, int dotPosition = -1);
+	void setVersion(int major, int minor);
 
 private:
 	CMovieBitmap** _digits;
 	int _numDigits;
+	bool _vertical;
 };
 
 class CBitmapText : public CView

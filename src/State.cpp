@@ -190,6 +190,7 @@ State::State():
     assign_indexes();
 
     root = true;
+    legacy = false;
 }
 
 State::~State() { cleanup(); }

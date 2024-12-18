@@ -16,13 +16,15 @@ PluginGUI::PluginGUI(void* ptr)
 	_plugin = (Plugin*)ptr;
 
 	ContextMenu = 0;
-	HMENU NoteControl1SubMenu = 0;
-	HMENU NoteControl2SubMenu = 0;
+	NoteControl1SubMenu = 0;
+	NoteControl2SubMenu = 0;
 	PopupParameter = -1;
 	_currentEnableButton = nullptr;
 	_expandButton = nullptr;
 	_expanded = false;
 	_graph = nullptr;
+	_versionNumber = nullptr;
+	_contractButton = nullptr;
 }
 
 //void PluginGUI::rebuild(void* ptr)
@@ -128,23 +130,23 @@ bool PluginGUI::open(void* ptr)
 	//Main settings
 	//----------------------------------------------------
 	addControl<CSpinner>(new CSpinner(CRect(sPoint(50, 7), sPoint(25, 11)), newFrame, this, 0, 2, 0, 16), L"port");
-	addControl<CSpinner>(new CSpinner(CRect(sPoint(117, 7), sPoint(25, 11)), newFrame, this, 0, 2, 0, 64), L"channel");
+	addControl<CSpinner>(new CSpinner(CRect(sPoint(112, 7), sPoint(25, 11)), newFrame, this, 0, 2, 0, 64), L"channel");
 	addControl<CSpinner>(new CSpinner(CRect(sPoint(50, 21), sPoint(25, 11)), newFrame, this, 0, 2, 1, 64), L"range");
 
 	CBitmap* checkbox = new CBitmap(PNG_checkboxTriggerNotesSimple);
-	addControl<COnOffButton>(new COnOffButton(CRect(sPoint(85, 21), sPoint(11, 11)), this, _plugin->getCID(L"enableNoteTrigger"), checkbox, 0), L"enableNoteTrigger");
+	addControl<COnOffButton>(new COnOffButton(CRect(sPoint((85 - 4), 21), sPoint(11, 11)), this, _plugin->getCID(L"enableNoteTrigger"), checkbox, 0), L"enableNoteTrigger");
 	checkbox->forget();
 
 	checkbox = new CBitmap(PNG_checkboxVelocitySimple);
-	addControl<COnOffButton>(new COnOffButton(CRect(sPoint(100, 21), sPoint(11, 11)), this, _plugin->getCID(L"enableNoteVelocity"), checkbox, 0), L"enableNoteVelocity");
+	addControl<COnOffButton>(new COnOffButton(CRect(sPoint((100 - 4), 21), sPoint(11, 11)), this, _plugin->getCID(L"enableNoteVelocity"), checkbox, 0), L"enableNoteVelocity");
 	checkbox->forget();
 
 	checkbox = new CBitmap(PNG_checkboxPanningSimple);
-	addControl<COnOffButton>(new COnOffButton(CRect(sPoint(115, 21), sPoint(11, 11)), this, _plugin->getCID(L"enableNotePanning"), checkbox, 0), L"enableNotePanning");
+	addControl<COnOffButton>(new COnOffButton(CRect(sPoint((115 - 4), 21), sPoint(11, 11)), this, _plugin->getCID(L"enableNotePanning"), checkbox, 0), L"enableNotePanning");
 	checkbox->forget();
 
 	checkbox = new CBitmap(PNG_checkboxPitchSimple);
-	addControl<COnOffButton>(new COnOffButton(CRect(sPoint(130, 21), sPoint(11, 11)), this, _plugin->getCID(L"enableNotePitch"), checkbox, 0), L"enableNotePitch");
+	addControl<COnOffButton>(new COnOffButton(CRect(sPoint((130 - 4), 21), sPoint(11, 11)), this, _plugin->getCID(L"enableNotePitch"), checkbox, 0), L"enableNotePitch");
 	checkbox->forget();
 	//----------------------------------------------------
 	
@@ -223,9 +225,15 @@ bool PluginGUI::open(void* ptr)
 	addControl<CGraph>(_graph);
 
 
+	CBitmap* versionLetters = new CBitmap(PNG_version_num);
+	_versionNumber = new CBitmapNumber(CRect(sPoint(139, 8), sPoint(5, 3)), frame, versionLetters, 6, true);
+	_versionNumber->setVersion(0, 992);
+	addControl<CBitmap>(_versionNumber);
+
+	versionLetters->forget();
 	knobHandle->forget();
 	font->forget();
-	tinyCheckbox->forget();
+	tinyCheckbox->forget(); 
 
 	setExpanded(_plugin->getParameter(L"expanded")->getFloat() > 0.5f);
 

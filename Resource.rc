@@ -34,4 +34,5 @@ PNG_harmonyFrame PNG "C:\\gamedev\\bendy_redo\\obj\\Debug\\x64\\\\assets\\harmon
 PNG_knob PNG "C:\\gamedev\\bendy_redo\\obj\\Debug\\x64\\\\assets\\knob.png"
 PNG_tinyCheckbox PNG "C:\\gamedev\\bendy_redo\\obj\\Debug\\x64\\\\assets\\tinyCheckbox.png"
 PNG_tinyCheckboxSimple PNG "C:\\gamedev\\bendy_redo\\obj\\Debug\\x64\\\\assets\\tinyCheckboxSimple.png"
+PNG_version_num PNG "C:\\gamedev\\bendy_redo\\obj\\Debug\\x64\\\\assets\\version_num.png"
 #endif

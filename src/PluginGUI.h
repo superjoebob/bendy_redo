@@ -10,6 +10,7 @@
 
 class Plugin;
 class CGraph;
+class CBitmapNumber;
 class PluginGUI : public PluginGUIEditor, public CControlListener
 {
 public:
@@ -59,5 +60,7 @@ private:
 	HMENU ContextMenu;
 	HMENU NoteControl1SubMenu;
 	HMENU NoteControl2SubMenu;
-	int PopupParameter;
+	int PopupParameter; 
+	
+	CBitmapNumber* _versionNumber;
 };

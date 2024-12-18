@@ -5,18 +5,23 @@
 #include "../resource.h"
 #include <mutex>
 
-CBitmapNumber::CBitmapNumber(const CRect& firstLetterSize, CFrame* frame, CBitmap* numberImage, int digits)
-	: CViewContainer(CRect(firstLetterSize.getTopLeft(), CPoint((firstLetterSize.getWidth() + sScaleFactor) * digits, firstLetterSize.getHeight())), frame)
+CBitmapNumber::CBitmapNumber(const CRect& firstLetterSize, CFrame* frame, CBitmap* numberImage, int digits, bool vertical)
+	: CViewContainer(CRect(firstLetterSize.getTopLeft(), vertical ? CPoint(firstLetterSize.getWidth(), (firstLetterSize.getHeight() + sScaleFactor) * digits) : CPoint((firstLetterSize.getWidth() + sScaleFactor) * digits, firstLetterSize.getHeight())), frame)
 {
 	CRect letterPosition = CRect(sPoint(0, 0), firstLetterSize.getSize());
 	setBackgroundColor(MakeCColor(0, 0, 0, 0));
 
+	_vertical = vertical;
 	_numDigits = digits;
 	_digits = new CMovieBitmap*[_numDigits];
 	for (int i = 0; i < _numDigits; i++)
 	{
 		_digits[i] = new CMovieBitmap(CRect(letterPosition.getTopLeft(), letterPosition.getSize()), nullptr, 0, numberImage->getHeight() / firstLetterSize.getHeight(), firstLetterSize.getHeight(), numberImage, sPoint(0, letterPosition.getHeight()));
-		letterPosition = letterPosition.offset(letterPosition.getWidth() + sScaleFactor, 0);
+		if (_vertical)
+			letterPosition = letterPosition.offset(0, letterPosition.getHeight() + sScaleFactor);
+		else
+			letterPosition = letterPosition.offset(letterPosition.getWidth() + sScaleFactor, 0);
+
 		addView(_digits[i]);
 	}
 
@@ -36,7 +41,7 @@ int numDigits(int number)
 	return digits;
 }
 
-void CBitmapNumber::setNumber(int number)
+void CBitmapNumber::setNumber(int number, int dotPosition)
 {
 	int numberOfDigits = numDigits(number);
 	char* numbers = new char[32];
@@ -62,6 +67,53 @@ void CBitmapNumber::setNumber(int number)
 	}
 
 	delete[] numbers;
+}
+
+void CBitmapNumber::setVersion(int major, int minor)
+{
+	int numberOfDigitsMajor = numDigits(major);
+	int numberOfDigitsMinor = numDigits(minor);
+	char* majorNumber = new char[32];
+	_itoa(major, majorNumber, 10);
+	char* minorNumber = new char[32];
+	_itoa(minor, minorNumber, 10);
+
+	_digits[0]->setOffset(CPoint(0, 12 * _digits[0]->getHeightOfOneImage()));
+
+	bool doonmajor = true;
+	int currentNumberIndex = 0;
+	for (int i = 1; i < _numDigits; i++)
+	{
+		if (doonmajor)
+		{
+			if (currentNumberIndex < numberOfDigitsMajor)
+			{
+				char c = majorNumber[currentNumberIndex];
+				_digits[i]->setOffset(CPoint(0, ((c - 48) + 1) * _digits[i]->getHeightOfOneImage()));
+				currentNumberIndex++;
+			}
+			else
+			{
+				currentNumberIndex = 0;
+				_digits[i]->setOffset(CPoint(0, 11 * _digits[i]->getHeightOfOneImage()));
+				doonmajor = false;
+			} 
+		}
+		else
+		{
+			if (currentNumberIndex < numberOfDigitsMinor)
+			{
+				char c = minorNumber[currentNumberIndex];
+				_digits[i]->setOffset(CPoint(0, ((c - 48) + 1) * _digits[i]->getHeightOfOneImage()));
+				currentNumberIndex++;
+			}
+			else
+				_digits[i]->setOffset(CPoint(0, 0));
+		}
+	}
+
+	delete[] majorNumber;
+	delete[] minorNumber;
 }
 
 CBitmapNumber::~CBitmapNumber()
