@@ -392,6 +392,33 @@ intptr_t _stdcall Plugin::Dispatcher(intptr_t ID, intptr_t Index, intptr_t Value
 
 		return PT_Text;
 	}
+	/*else if (ID == FPD_SongPosChanged)
+	{
+		_SendBendRange();
+		_midiPatchStatusCache.clear();
+		_midiPanCache.clear();
+		_midiVolumeCache.clear();
+		_midiPitchCache.clear();
+		UpdateBankChange(_state->channel.value);
+	}
+	else */if (ID == FPD_SetPlaying || ID == FPD_Flush)
+	{
+		_SendBendRange();
+		_midiPatchStatusCache.clear();
+		_midiPanCache.clear();
+		_midiVolumeCache.clear();
+		_midiPitchCache.clear();
+		UpdateBankChange(_state->channel.value);
+
+		byte portVal = (byte)_state->port.value;
+		byte chan = (byte)_state->channel.value - 1;
+
+		MIDIOut((byte)(176 | chan), 10, _masterPan, portVal); //reset pan
+		MIDIOut((byte)(176 | chan), 7, _masterVolume, portVal); //reset volume
+
+		unsigned short sendPitch = (unsigned short)8192;	
+		MIDIOut((byte)(224 | chan), (byte)(sendPitch & 127), (byte)(sendPitch >> 7), portVal); //reset pitch
+	}
 	//else if (ID == FPD_GetParamInfo)
 	//{
 	//	int qq = 1;
@@ -489,14 +516,7 @@ int _stdcall Plugin::ProcessParam(int index, int value, int RECFlags)
 			}		
 			
 			if ((param->midiTrigger & MidiTrigger::BendRangeChange) != MidiTrigger::None)
-			{
-				byte port = (byte)_state->port.value;
-				byte chan = (byte)_state->channel.value - 1;
-				MIDIOut((byte)(176 | chan), 0x65, 0, port);
-				MIDIOut((byte)(176 | chan), 0x64, 0, port);
-				MIDIOut((byte)(176 | chan), 0x06, _state->preset.range.value, port);
-				MIDIOut((byte)(176 | chan), 0x26, 0, port);
-			}
+				_SendBendRange();
 		}
 		didSomething = true;
 
@@ -514,10 +534,24 @@ int _stdcall Plugin::ProcessParam(int index, int value, int RECFlags)
 	return value;
 }
 
+void Plugin::_SendBendRange()
+{
+	byte port = (byte)_state->port.value;
+	byte chan = (byte)_state->channel.value - 1;
+	MIDIOut((byte)(176 | chan), 0x65, 0, port);
+	MIDIOut((byte)(176 | chan), 0x64, 0, port);
+	MIDIOut((byte)(176 | chan), 0x06, _state->preset.range.value, port);
+	//MIDIOut((byte)(176 | chan), 0x26, 0, port); //Not sending fine bend range because MidiOut doesn't send it.
+}
+
 int _stdcall Plugin::ProcessEvent(int EventID, int EventValue, int Flags)
 {
 	if (EventID == FPE_MIDI_Pitch)
 		_masterPitchCents = EventValue;
+	else if (EventID == FPE_MIDI_Vol)
+		_masterVolume = EventValue;
+	else if (EventID == FPE_MIDI_Pan)
+		_masterPan = EventValue;
 	return TCPPFruityPlug::ProcessEvent(EventID, EventValue, Flags);
 }
 
@@ -639,10 +673,11 @@ void _stdcall Plugin::NewTick()
 			continue;
 
 		n->pan = n->params->FinalLevels.Pan;
-		n->velocity = std::fmin(std::sqrtf(n->params->InitLevels.Vol) * 100, 127);
 
-		if(!_state->legacy)
-			n->channelVolume = std::sqrtf(n->params->FinalLevels.Vol);
+		n->velocity = n->midiVelocity;
+
+		if (!_state->legacy)
+			n->channelVolume = _masterVolume;
 
 		n->pitch = n->params->FinalLevels.Pitch  + _masterPitchCents;
 		if (_state->vibratoEnabled.value)
@@ -660,8 +695,6 @@ void _stdcall Plugin::NewTick()
 			n->initialVelocity = n->velocity;
 			letters[_pulseIndex] = n->hostTag;
 			_pulseIndex = (_pulseIndex + 1) % 5;
-
-			n->lastPitchDif = 0;
 
 			if (_state->harmonizerEnabled.value)
 				n->harmonic = CalculateHarmonic(n->startingNote);
@@ -720,35 +753,66 @@ TVoiceHandle _stdcall Plugin::TriggerVoice(PVoiceParams VoiceParams, intptr_t Se
 	if (_state->legacy)
 	{
 		n->channelVolume = VoiceParams->FinalLevels.Vol;
-		PlugHost->Voice_ProcessEvent(SetTag, FPV_SetLinkVelocity, 1, 0);
+		PlugHost->Voice_ProcessEvent(SetTag, FPV_SetLinkVelocity, 1, 0); 
 	}
 	else
-		PlugHost->Voice_ProcessEvent(SetTag, FPV_SetLinkVelocity, 0, 0);
-
-	//Retriggers
-	for (int i = 0; i < _notes.size(); i++)
 	{
-		if (_notes[i]->channel == n->channel && _notes[i]->startingNote == n->startingNote)
-		{
-			_notes[i]->state = NoteState::NoteOff;
-			_notes[i]->startingNote = -1;
+		int ret = PlugHost->Voice_ProcessEvent(SetTag, FPV_GetVelocity, 0, 0);
+		float vel = *(float*)&ret;
+		n->midiVelocity = std::fmin(std::roundf(vel * 128), 127);
 
-			if (_state->enableNoteTrigger.value)
-				MIDIOut((byte)(128 | (_notes[i]->channel - 1)), (byte)_notes[i]->startingNote, (byte)_notes[i]->velocity, (byte)_state->port.value);
-
-			if (_notes[i]->harmonic != 0 && _state->harmonizerEnabled.value)
-				MIDIOut((byte)(128 | (_notes[i]->channel - 1)), (byte)_notes[i]->harmonic, (byte)_notes[i]->velocity, (byte)_state->port.value);
-		}
+		PlugHost->Voice_ProcessEvent(SetTag, FPV_SetLinkVelocity, 0, 0);
 	}
 
-	_notes.push_back(n);
+
+
+	////Retriggers
+	//for (int i = 0; i < _notes.size(); i++)
+	//{
+	//	if (_notes[i]->channel == n->channel && _notes[i]->startingNote == n->startingNote)
+	//	{
+	//		_notes[i]->state = NoteState::NoteOff;
+	//		_notes[i]->startingNote = -1;
+
+	//		if (_state->enableNoteTrigger.value)
+	//			MIDIOut((byte)(128 | (_notes[i]->channel - 1)), (byte)_notes[i]->startingNote, (byte)_notes[i]->velocity, (byte)_state->port.value);
+
+	//		if (_notes[i]->harmonic != 0 && _state->harmonizerEnabled.value)
+	//			MIDIOut((byte)(128 | (_notes[i]->channel - 1)), (byte)_notes[i]->harmonic, (byte)_notes[i]->velocity, (byte)_state->port.value);
+	//	}
+	//}
+
+	_notes.insert(_notes.begin(), n);
 
 	return (TVoiceHandle)n;
 }
  
 void _stdcall Plugin::Voice_Release(TVoiceHandle Handle) 
 {
-	((Note*)Handle)->state = NoteState::NoteOff;
+	Note* note = ((Note*)Handle);
+	for (int i = 0; i < _notes.size(); i++)
+	{
+		if (_notes[i] == note)
+		{
+			note->state = NoteState::NoteOff;
+			for (int i = 0; i < 5; i++)
+			{
+				if (letters[i] == note->hostTag)
+					letters[i] = 0;
+			}
+
+			//if (note->startingNote >= 0)
+			{
+				if (_state->enableNoteTrigger.value)
+					MIDIOut((byte)(128 | (note->channel - 1)), (byte)note->startingNote, (byte)64, (byte)_state->port.value);
+
+				if (note->harmonic != 0 && _state->harmonizerEnabled.value)
+					MIDIOut((byte)(128 | (note->channel - 1)), (byte)note->harmonic, (byte)64, (byte)_state->port.value);
+			}
+
+			return;
+		}
+	}
 }
 
 void _stdcall Plugin::Voice_Kill(TVoiceHandle Handle)
@@ -759,22 +823,6 @@ void _stdcall Plugin::Voice_Kill(TVoiceHandle Handle)
 		if (_notes[i] == note)
 		{
 			note->state = NoteState::Finished;
-			for (int i = 0; i < 5; i++)
-			{
-				if (letters[i] == note->hostTag)
-					letters[i] = 0;
-			}
-
-			if (note->startingNote >= 0)
-			{
-				if (_state->enableNoteTrigger.value)
-					MIDIOut((byte)(128 | (note->channel - 1)), (byte)note->startingNote, (byte)note->velocity, (byte)_state->port.value);
-
-				if (note->harmonic != 0 && _state->harmonizerEnabled.value)
-					MIDIOut((byte)(128 | (note->channel - 1)), (byte)note->harmonic, (byte)note->velocity, (byte)_state->port.value);
-			}
-
-
 			delete note;
 			_notes.erase(_notes.begin() + i);
 			return;
@@ -1013,19 +1061,10 @@ void Plugin::WritePitch(Note* note, bool zeroPitch)
 	byte portVal = (byte)_state->port.value;
 	byte chan = (byte)(note->channel - 1);
 
-	//MIDIOut((byte)(176 | chan), 101, 0, port);
-	//MIDIOut((byte)(176 | chan), 100, 0, port);
-	//MIDIOut((byte)(176 | chan), 6, (byte)parms.range.value, port);
-	//MIDIOut((byte)(176 | chan), 38, 0, port);
-
-
 	float middlePitch = 8192;
-	if (zeroPitch)
-		MIDIOut((byte)(224 | chan), 0, (byte)((int)middlePitch >> 7), (byte)portVal);
-	else
+	unsigned short sendPitch = (unsigned short)middlePitch;
+	if (!zeroPitch)
 	{
-		//note->vibratoSin += note->startingNote - 120;
-
 		int pitchDif = (int)note->pitch - ((note->startingNote - 60) * 100);
 	
 		int maxDif = _state->preset.range.value * 100;
@@ -1034,13 +1073,21 @@ void Plugin::WritePitch(Note* note, bool zeroPitch)
 		if (pitchDif > maxDif)
 			pitchDif = maxDif;
 
-		//pitchDif += (int)(_vibrato * 100);
+		sendPitch = (unsigned short)(middlePitch + (((float)pitchDif / maxDif) * (middlePitch - 1)));
+	}
 
-		if (note->lastPitchDif != pitchDif /* && pNote.updatedThisFrame == false*/)
-		{
-			unsigned short pitchVal = (unsigned short)(middlePitch + (((float)pitchDif / maxDif) * (middlePitch - 1)));
-			MIDIOut((byte)(224 | chan), (byte)(pitchVal & 127), (byte)(pitchVal >> 7), (byte)portVal);
-		}
+	unsigned short lastSend = 0;
+	int outHash = _state->port.value + ((note->channel + 4538) * 3029);
+	auto it = _midiPitchCache.find(outHash);
+	if (it == _midiPitchCache.end())
+		_midiPitchCache[outHash] = lastSend = 0;
+	else
+		lastSend = (*it).second;
+
+	if (sendPitch != lastSend)
+	{
+		MIDIOut((byte)(224 | chan), (byte)(sendPitch & 127), (byte)(sendPitch >> 7), (byte)portVal);
+		_midiPitchCache[outHash] = sendPitch;
 	}
 }
 
@@ -1049,25 +1096,34 @@ void Plugin::WritePan(Note* note)
 	if (!_state->enableNotePanning.value)
 		return;
 
- 	byte pan = (byte)(((note->pan + 1.0f) / 2.0f) * 127);
-	if (pan != note->lastSetPan)
+	byte lastSend = 0;
+	int outHash = _state->port.value + ((note->channel + 4538) * 3029);
+	auto it = _midiPanCache.find(outHash);
+	if (it == _midiPanCache.end())
+		_midiPanCache[outHash] = lastSend = 0;
+	else
+		lastSend = (*it).second;
+
+	byte pan = (byte)(((note->pan + 1.0f) / 2.0f) * 127);
+	if(pan != lastSend)
 	{
 		byte portVal = (byte)_state->port.value;
 		byte chan = (byte)note->channel - 1;
 
-		note->lastSetPan = pan;
 		MIDIOut((byte)(176 | chan), 10, pan, portVal);
+		_midiPanCache[outHash] = pan;
 	}
 }
 
 void Plugin::WriteVolume(Note* note)
 {
-	byte volume = note->channelVolume * 127;
+	byte volume = note->channelVolume;
 	if (_state->legacy)
 	{
 		if (!_state->enableNoteVelocity.value)
 			return;
 
+		volume *= 127;
 		volume = (byte)min((note->channelVolume * 1.45f) * 127, 127);
 	}
 	else
@@ -1081,12 +1137,20 @@ void Plugin::WriteVolume(Note* note)
 		}
 	}
 
-	if (volume != note->lastSetVolume)
+	byte lastSend = 0;
+	int outHash = _state->port.value + ((note->channel + 4538) * 3029);
+	auto it = _midiVolumeCache.find(outHash);
+	if (it == _midiVolumeCache.end())
+		_midiVolumeCache[outHash] = lastSend = 0;
+	else
+		lastSend = (*it).second;
+
+	if (volume != lastSend)
 	{
 		byte portVal = (byte)_state->port.value;
 		byte chan = (byte)note->channel - 1;
 
-		note->lastSetVolume = volume;
 		MIDIOut((byte)(176 | chan), 7, volume, portVal);
+		_midiVolumeCache[outHash] = volume;
 	}
 }

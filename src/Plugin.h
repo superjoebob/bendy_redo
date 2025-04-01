@@ -36,6 +36,7 @@ struct Note
 	PVoiceParams params = nullptr;
 
 	int velocity = 0;
+	byte midiVelocity = 0;
 	int initialVelocity = 0;
 	float channelVolume = 0.0f;
 	float pan = 0.0f;
@@ -46,8 +47,6 @@ struct Note
 	//Bendy specific
 	char harmonic = 0;
 	char startingNote = 255;
-	int lastSetPan = -1;
-	int lastPitchDif = 0;
 	int lastSetVolume = -1;
 	float vibratoSin = 0.0f;
 };
@@ -114,6 +113,8 @@ public:
 	void WritePan(Note* note);
 	void WriteVolume(Note* note);
 
+	void _SendBendRange();
+
 	int letters[5];
 protected:
 	PluginGUI* _gui;
@@ -123,11 +124,17 @@ protected:
 	std::vector<Preset*> _presets;
 	std::vector<Note*> _notes;
 	std::map<int, int> _midiPatchStatusCache;
+	std::map<int, byte> _midiPanCache;
+	std::map<int, unsigned short> _midiPitchCache;
+	std::map<int, byte> _midiVolumeCache;
 	std::map<int, std::map<byte, byte>> _ccHistory;
 	std::vector<Scale> _scales;
 	std::unordered_set<int> _updatedThisFrame;
+	int _lastSetPan = -1;
 
 	int _masterPitchCents;
+	int _masterVolume = 100;
+	int _masterPan = 64;
 
 	byte CalculateHarmonic(byte note);
 };
