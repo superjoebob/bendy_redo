@@ -5,3 +5,10 @@ C:\gamedev\synthman_git\synthman\resource_builder\obj\Release\resource_builder.c
 C:\gamedev\synthman_git\synthman\resource_builder\obj\Release\resource_builder.csproj.CoreCompileInputs.cache
 C:\gamedev\synthman_git\synthman\resource_builder\obj\Release\resource_builder.exe
 C:\gamedev\synthman_git\synthman\resource_builder\obj\Release\resource_builder.pdb
+C:\gamedev\bendy_redo\resource_builder\bin\Release\resource_builder.exe.config
+C:\gamedev\bendy_redo\resource_builder\bin\Release\resource_builder.exe
+C:\gamedev\bendy_redo\resource_builder\bin\Release\resource_builder.pdb
+C:\gamedev\bendy_redo\resource_builder\obj\Release\resource_builder.csproj.AssemblyReference.cache
+C:\gamedev\bendy_redo\resource_builder\obj\Release\resource_builder.csproj.CoreCompileInputs.cache
+C:\gamedev\bendy_redo\resource_builder\obj\Release\resource_builder.exe
+C:\gamedev\bendy_redo\resource_builder\obj\Release\resource_builder.pdb

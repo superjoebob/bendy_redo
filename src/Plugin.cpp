@@ -682,8 +682,23 @@ void _stdcall Plugin::NewTick()
 		n->pitch = n->params->FinalLevels.Pitch  + _masterPitchCents;
 		if (_state->vibratoEnabled.value)
 		{
+			if (n->vibratoLerp < 1.0f)
+				n->vibratoLerp += 0.05f;
+			else
+				n->vibratoLerp = 1;
+		}
+		else
+		{
+			if (n->vibratoLerp > 0.0f)
+				n->vibratoLerp -= 0.05f;
+			else
+				n->vibratoLerp = 0;
+		}
+
+		if (n->vibratoLerp > 0)
+		{
 			n->vibratoSin += _state->vibratoSpeed.value / 8.0f;
-			n->pitch += sin(n->vibratoSin) * (_state->vibratoDepth.value * 100);
+			n->pitch += sin(n->vibratoSin) * (_state->vibratoDepth.value * 100) * n->vibratoLerp;
 		}
 
 		n->control1 = n->params->FinalLevels.FCut;

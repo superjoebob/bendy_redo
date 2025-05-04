@@ -49,6 +49,7 @@ struct Note
 	char startingNote = 255;
 	int lastSetVolume = -1;
 	float vibratoSin = 0.0f;
+	float vibratoLerp = 0;
 };
 
 enum NoteControlIndex
