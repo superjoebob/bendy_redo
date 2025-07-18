@@ -1093,15 +1093,15 @@ void Plugin::WritePitch(Note* note, bool zeroPitch)
 		sendPitch = (unsigned short)std::fmin(std::roundf((normalizedPitch + 1.0f) / 2.0f * maxSendPitch), maxSendPitch);
 	}
 
-	unsigned short lastSend = 0;
+	unsigned short lastSend = 65535;
 	int outHash = _state->port.value + ((note->channel + 4538) * 3029);
 	auto it = _midiPitchCache.find(outHash);
 	if (it == _midiPitchCache.end())
-		_midiPitchCache[outHash] = lastSend = 0;
+		_midiPitchCache[outHash] = lastSend = 65535;
 	else
 		lastSend = (*it).second;
 
-	if (sendPitch != lastSend)
+	if (lastSend == 65535 || sendPitch != lastSend)
 	{
 		MIDIOut((byte)(224 | chan), (byte)(sendPitch & 127), (byte)(sendPitch >> 7), (byte)portVal);
 		_midiPitchCache[outHash] = sendPitch;
@@ -1113,17 +1113,17 @@ void Plugin::WritePan(Note* note)
 	if (!_state->enableNotePanning.value)
 		return;
 
-	byte lastSend = 0;
+	byte lastSend = 256;
 	int outHash = _state->port.value + ((note->channel + 4538) * 3029);
 	auto it = _midiPanCache.find(outHash);
 	if (it == _midiPanCache.end())
-		_midiPanCache[outHash] = lastSend = 0;
+		_midiPanCache[outHash] = lastSend = 256;
 	else
 		lastSend = (*it).second;
 
 	byte maxSendPan = 127;
 	byte pan = (byte)std::fmin(std::roundf((note->pan + 1.0f) / 2.0f * maxSendPan), maxSendPan);
-	if(pan != lastSend)
+	if(lastSend == 256 || pan != lastSend)
 	{
 		byte portVal = (byte)_state->port.value;
 		byte chan = (byte)note->channel - 1;
@@ -1155,15 +1155,15 @@ void Plugin::WriteVolume(Note* note)
 		}
 	}
 
-	byte lastSend = 0;
+	byte lastSend = 256;
 	int outHash = _state->port.value + ((note->channel + 4538) * 3029);
 	auto it = _midiVolumeCache.find(outHash);
 	if (it == _midiVolumeCache.end())
-		_midiVolumeCache[outHash] = lastSend = 0;
+		_midiVolumeCache[outHash] = lastSend = 256;
 	else
 		lastSend = (*it).second;
 
-	if (volume != lastSend)
+	if (lastSend == 256 || volume != lastSend)
 	{
 		byte portVal = (byte)_state->port.value;
 		byte chan = (byte)note->channel - 1;
