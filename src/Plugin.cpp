@@ -1076,8 +1076,8 @@ void Plugin::WritePitch(Note* note, bool zeroPitch)
 	byte portVal = (byte)_state->port.value;
 	byte chan = (byte)(note->channel - 1);
 
-	float middlePitch = 8192;
-	unsigned short sendPitch = (unsigned short)middlePitch;
+	unsigned short middlePitch = 8192;
+	unsigned short sendPitch = middlePitch;
 	if (!zeroPitch)
 	{
 		int pitchDif = (int)note->pitch - ((note->startingNote - 60) * 100);
@@ -1088,7 +1088,9 @@ void Plugin::WritePitch(Note* note, bool zeroPitch)
 		if (pitchDif > maxDif)
 			pitchDif = maxDif;
 
-		sendPitch = (unsigned short)(middlePitch + (((float)pitchDif / maxDif) * (middlePitch - 1)));
+		unsigned short maxSendPitch = sendPitch * 2 - 1;
+		float normalizedPitch = (float)pitchDif / maxDif;
+		sendPitch = (unsigned short)std::fmin(std::roundf((normalizedPitch + 1.0f) / 2.0f * maxSendPitch), maxSendPitch);
 	}
 
 	unsigned short lastSend = 0;
@@ -1119,7 +1121,8 @@ void Plugin::WritePan(Note* note)
 	else
 		lastSend = (*it).second;
 
-	byte pan = (byte)(((note->pan + 1.0f) / 2.0f) * 127);
+	byte maxSendPan = 127;
+	byte pan = (byte)std::fmin(std::roundf((note->pan + 1.0f) / 2.0f * maxSendPan), maxSendPan);
 	if(pan != lastSend)
 	{
 		byte portVal = (byte)_state->port.value;
