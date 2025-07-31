@@ -1172,3 +1172,8 @@ void Plugin::WriteVolume(Note* note)
 		_midiVolumeCache[outHash] = volume;
 	}
 }
+
+bool Plugin::isLegacy()
+{
+	return _state != nullptr && _state->legacy;
+}

@@ -44,6 +44,7 @@ void PluginGUI::reconnect()
 	}
 	_graph->reconnect();
 	setExpanded(_plugin->getParameter(L"expanded")->getFloat() > 0.5f);
+	_legacyText->setVisible(_plugin->isLegacy());
 }
 
 template <typename T>
@@ -230,6 +231,10 @@ bool PluginGUI::open(void* ptr)
 	_versionNumber->setVersion(0, 993);
 	addControl<CBitmap>(_versionNumber);
 
+	_legacyText = addControl<CBitmapText>(new CBitmapText(this, CRect(sPoint(18, 32), sPoint(24, 8)), CPoint(12, 12), font, L"Legacy Mode"), L"legacyMode");
+	_legacyText->setText(L"LEGACY", true);
+	_legacyText->setVisible(_plugin->isLegacy());
+
 	versionLetters->forget();
 	knobHandle->forget();
 	font->forget();
@@ -283,6 +288,7 @@ void PluginGUI::close()
 	_currentEnableButton = nullptr;
 	_expandButton = nullptr;
 	_graphUpdaters.clear();
+	_legacyText = nullptr;
 }
 
 void PluginGUI::idle()

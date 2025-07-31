@@ -11,6 +11,7 @@
 class Plugin;
 class CGraph;
 class CBitmapNumber;
+class CBitmapText;
 class PluginGUI : public PluginGUIEditor, public CControlListener
 {
 public:
@@ -63,4 +64,5 @@ private:
 	int PopupParameter; 
 	
 	CBitmapNumber* _versionNumber;
+	CBitmapText* _legacyText;
 };

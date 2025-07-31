@@ -116,6 +116,8 @@ public:
 
 	void _SendBendRange();
 
+	bool isLegacy();
+
 	int letters[5];
 protected:
 	PluginGUI* _gui;
