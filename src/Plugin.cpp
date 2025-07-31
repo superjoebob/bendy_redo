@@ -720,7 +720,7 @@ void _stdcall Plugin::NewTick()
 
 			WritePan(n);
 			WriteVolume(n);
-			WritePitch(n, true);
+			WritePitch(n);
 
 			byte writeVelocity = n->velocity;
 			if (_state->legacy)
@@ -774,7 +774,7 @@ TVoiceHandle _stdcall Plugin::TriggerVoice(PVoiceParams VoiceParams, intptr_t Se
 	{
 		int ret = PlugHost->Voice_ProcessEvent(SetTag, FPV_GetVelocity, 0, 0);
 		float vel = *(float*)&ret;
-		n->midiVelocity = std::fmin(std::roundf(vel * 128), 127);
+		n->midiVelocity = min(std::roundf(vel * 127), 127);
 
 		PlugHost->Voice_ProcessEvent(SetTag, FPV_SetLinkVelocity, 0, 0);
 	}
