@@ -110,6 +110,9 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <ModuleDefinitionFile>$(ProjectDir)src/flplug.def</ModuleDefinitionFile>
     </Link>
+    <PostBuildEvent>
+      <Command>$(SolutionDir)\install_bendy.exe BENDY "$(OutDir)BENDY.dll"</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
@@ -130,6 +133,9 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <ModuleDefinitionFile>src/flplug.def</ModuleDefinitionFile>
     </Link>
+    <PostBuildEvent>
+      <Command>$(SolutionDir)\install_bendy.exe BENDY "$(OutDir)BENDY.dll"</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -150,7 +156,7 @@
       <Command>call "$(SolutionDir)resource_builder/bin/Debug/resource_builder.exe" -in "$(ProjectDir)assets" -out "$(IntermediateOutputPath)/" -metadata "$(ProjectDir)resource_builder/PluginContent.cs" -scale "3"</Command>
     </PreBuildEvent>
     <PostBuildEvent>
-      <Command>$(OutDir)..\install_bendy.exe BENDY "$(OutDir)BENDY_x64.dll"</Command>
+      <Command>$(SolutionDir)\install_bendy.exe BENDY "$(OutDir)BENDY_x64.dll"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -173,7 +179,7 @@
       <ModuleDefinitionFile>src/flplug.def</ModuleDefinitionFile>
     </Link>
     <PostBuildEvent>
-      <Command>$(OutDir)..\install_bendy.exe BENDY "$(OutDir)BENDY_x64.dll"</Command>
+      <Command>$(SolutionDir)\install_bendy.exe BENDY "$(OutDir)BENDY_x64.dll"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
