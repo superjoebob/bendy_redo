@@ -720,7 +720,7 @@ void _stdcall Plugin::NewTick()
 
 			WritePan(n);
 			WriteVolume(n);
-			WritePitch(n, true);
+			WritePitch(n);
 
 			byte writeVelocity = n->velocity;
 			if (_state->legacy)
@@ -774,7 +774,7 @@ TVoiceHandle _stdcall Plugin::TriggerVoice(PVoiceParams VoiceParams, intptr_t Se
 	{
 		int ret = PlugHost->Voice_ProcessEvent(SetTag, FPV_GetVelocity, 0, 0);
 		float vel = *(float*)&ret;
-		n->midiVelocity = std::fmin(std::roundf(vel * 128), 127);
+		n->midiVelocity = min(std::roundf(vel * 127), 127);
 
 		PlugHost->Voice_ProcessEvent(SetTag, FPV_SetLinkVelocity, 0, 0);
 	}
@@ -1076,8 +1076,8 @@ void Plugin::WritePitch(Note* note, bool zeroPitch)
 	byte portVal = (byte)_state->port.value;
 	byte chan = (byte)(note->channel - 1);
 
-	float middlePitch = 8192;
-	unsigned short sendPitch = (unsigned short)middlePitch;
+	unsigned short middlePitch = 8192;
+	unsigned short sendPitch = middlePitch;
 	if (!zeroPitch)
 	{
 		int pitchDif = (int)note->pitch - ((note->startingNote - 60) * 100);
@@ -1088,18 +1088,20 @@ void Plugin::WritePitch(Note* note, bool zeroPitch)
 		if (pitchDif > maxDif)
 			pitchDif = maxDif;
 
-		sendPitch = (unsigned short)(middlePitch + (((float)pitchDif / maxDif) * (middlePitch - 1)));
+		unsigned short maxSendPitch = sendPitch * 2 - 1;
+		float normalizedPitch = (float)pitchDif / maxDif;
+		sendPitch = (unsigned short)std::fmin(std::roundf((normalizedPitch + 1.0f) / 2.0f * maxSendPitch), maxSendPitch);
 	}
 
-	unsigned short lastSend = 0;
+	unsigned short lastSend = 65535;
 	int outHash = _state->port.value + ((note->channel + 4538) * 3029);
 	auto it = _midiPitchCache.find(outHash);
 	if (it == _midiPitchCache.end())
-		_midiPitchCache[outHash] = lastSend = 0;
+		_midiPitchCache[outHash] = lastSend = 65535;
 	else
 		lastSend = (*it).second;
 
-	if (sendPitch != lastSend)
+	if (lastSend == 65535 || sendPitch != lastSend)
 	{
 		MIDIOut((byte)(224 | chan), (byte)(sendPitch & 127), (byte)(sendPitch >> 7), (byte)portVal);
 		_midiPitchCache[outHash] = sendPitch;
@@ -1111,16 +1113,17 @@ void Plugin::WritePan(Note* note)
 	if (!_state->enableNotePanning.value)
 		return;
 
-	byte lastSend = 0;
+	byte lastSend = 256;
 	int outHash = _state->port.value + ((note->channel + 4538) * 3029);
 	auto it = _midiPanCache.find(outHash);
 	if (it == _midiPanCache.end())
-		_midiPanCache[outHash] = lastSend = 0;
+		_midiPanCache[outHash] = lastSend = 256;
 	else
 		lastSend = (*it).second;
 
-	byte pan = (byte)(((note->pan + 1.0f) / 2.0f) * 127);
-	if(pan != lastSend)
+	byte maxSendPan = 127;
+	byte pan = (byte)std::fmin(std::roundf((note->pan + 1.0f) / 2.0f * maxSendPan), maxSendPan);
+	if(lastSend == 256 || pan != lastSend)
 	{
 		byte portVal = (byte)_state->port.value;
 		byte chan = (byte)note->channel - 1;
@@ -1152,15 +1155,15 @@ void Plugin::WriteVolume(Note* note)
 		}
 	}
 
-	byte lastSend = 0;
+	byte lastSend = 256;
 	int outHash = _state->port.value + ((note->channel + 4538) * 3029);
 	auto it = _midiVolumeCache.find(outHash);
 	if (it == _midiVolumeCache.end())
-		_midiVolumeCache[outHash] = lastSend = 0;
+		_midiVolumeCache[outHash] = lastSend = 256;
 	else
 		lastSend = (*it).second;
 
-	if (volume != lastSend)
+	if (lastSend == 256 || volume != lastSend)
 	{
 		byte portVal = (byte)_state->port.value;
 		byte chan = (byte)note->channel - 1;
@@ -1168,4 +1171,9 @@ void Plugin::WriteVolume(Note* note)
 		MIDIOut((byte)(176 | chan), 7, volume, portVal);
 		_midiVolumeCache[outHash] = volume;
 	}
+}
+
+bool Plugin::isLegacy()
+{
+	return _state != nullptr && _state->legacy;
 }
