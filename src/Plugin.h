@@ -6,13 +6,13 @@
 
 struct FruityPlugInfo
 {
-	int Tag;
+	TPluginTag Tag;
 	TFruityPlugHost* Host;
 };
 
 // voice
 struct TPlugVoice {
-	int HostTag;
+	TPluginTag HostTag;
 	PVoiceParams Params;
 	int Pos[2];
 	int State;

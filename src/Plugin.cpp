@@ -4,7 +4,7 @@
 #include "StreamWrapper.h"
 #include <codecvt>
 #include <locale>
-extern "C" TFruityPlug * _stdcall CreatePlugInstance(TFruityPlugHost * Host, int Tag)
+extern "C" TFruityPlug * _stdcall CreatePlugInstance(TFruityPlugHost * Host, TPluginTag Tag)
 {
 	FruityPlugInfo info;
 	info.Host = Host;
@@ -720,7 +720,7 @@ void _stdcall Plugin::NewTick()
 
 			WritePan(n);
 			WriteVolume(n);
-			WritePitch(n);
+			WritePitch(n, true);
 
 			byte writeVelocity = n->velocity;
 			if (_state->legacy)
