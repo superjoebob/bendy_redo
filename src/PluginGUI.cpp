@@ -228,7 +228,7 @@ bool PluginGUI::open(void* ptr)
 
 	CBitmap* versionLetters = new CBitmap(PNG_version_num);
 	_versionNumber = new CBitmapNumber(CRect(sPoint(139, 8), sPoint(5, 3)), frame, versionLetters, 6, true);
-	_versionNumber->setVersion(0, 993);
+	_versionNumber->setVersion(0, 994);
 	addControl<CBitmap>(_versionNumber);
 
 	_legacyText = addControl<CBitmapText>(new CBitmapText(this, CRect(sPoint(18, 32), sPoint(24, 8)), CPoint(12, 12), font, L"Legacy Mode"), L"legacyMode");
